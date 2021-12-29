@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.wms.infra.mapper.WmsDeliveryMonitoringMapper">
+
+    <select id="selectDailyDelivery" resultType="com.ruike.wms.api.dto.WmsDeliveryMonitoringDTO">
+        SELECT
+            doc.INSTRUCTION_DOC_STATUS,
+            count(*) quantity
+        FROM
+            mt_instruction_doc doc
+            JOIN (
+            SELECT
+                wddd.instruction_doc_id,
+                count(*)
+            FROM
+                mt_calendar_shift mcs
+                JOIN hme_wo_dispatch_recode hwdr ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+                JOIN wms_component_demand_record wcdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+                JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+            WHERE
+                wddd.instruction_doc_id IS NOT NULL
+                AND mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+            GROUP BY
+                wddd.instruction_doc_id
+            ) temp ON doc.instruction_doc_id = temp.instruction_doc_id
+            where doc.TENANT_ID = #{tenantId}
+            and doc.INSTRUCTION_DOC_STATUS in ('NEW','RELEASED','PREPARE_EXECUTE','PREPARE_COMPLETE','SIGN_EXECUTE','SIGN_COMPLETE','CLOSED')
+        GROUP BY
+            doc.INSTRUCTION_DOC_STATUS
+    </select>
+
+    <select id="selectProLineDelivery" resultType="com.ruike.wms.api.dto.WmsDeliveryMonitoringDTO3">
+        SELECT
+            doc.INSTRUCTION_DOC_STATUS,
+            line.PROD_LINE_NAME,
+            count(*) quantity
+        FROM
+            mt_instruction_doc doc
+            JOIN (
+            SELECT
+                wddd.instruction_doc_id,
+                hwdr.PROD_LINE_ID,
+                count(*)
+            FROM
+                mt_calendar_shift mcs
+                JOIN hme_wo_dispatch_recode hwdr ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+                JOIN wms_component_demand_record wcdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+                JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+            WHERE
+                wddd.instruction_doc_id IS NOT NULL
+                AND mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+            GROUP BY
+                wddd.instruction_doc_id,
+                hwdr.PROD_LINE_ID
+            ) temp ON doc.instruction_doc_id = temp.instruction_doc_id
+            JOIN mt_mod_production_line line ON line.PROD_LINE_ID = temp.PROD_LINE_ID
+            where doc.TENANT_ID = #{tenantId}
+            and doc.INSTRUCTION_DOC_STATUS in ('NEW','RELEASED','PREPARE_EXECUTE','PREPARE_COMPLETE','SIGN_EXECUTE','SIGN_COMPLETE','CLOSED')
+        GROUP BY
+            doc.INSTRUCTION_DOC_STATUS,
+            line.PROD_LINE_NAME
+    </select>
+
+
+    <select id="selectMonthDelivery" resultType="com.ruike.wms.api.dto.WmsDeliveryMonitoringDTO5">
+        SELECT
+            DATE_FORMAT( DATE_SUB( temp.SHIFT_DATE, INTERVAL 1 DAY ), '%m' ) months,
+            count(*) qty
+        FROM
+            mt_instruction_doc doc
+            JOIN (
+            SELECT
+                wddd.instruction_doc_id,
+                mcs.SHIFT_DATE,
+                count(*)
+            FROM
+                mt_calendar_shift mcs
+                JOIN hme_wo_dispatch_recode hwdr ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+                JOIN wms_component_demand_record wcdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+                JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+            WHERE
+                wddd.instruction_doc_id IS NOT NULL
+                AND mcs.SHIFT_DATE >= concat(YEAR(now( )),'-01-02')
+            GROUP BY
+                wddd.instruction_doc_id,
+                mcs.SHIFT_DATE
+            ) temp ON doc.instruction_doc_id = temp.instruction_doc_id
+            where doc.TENANT_ID = #{tenantId}
+        GROUP BY
+            DATE_FORMAT( DATE_SUB( temp.SHIFT_DATE, INTERVAL 1 DAY ), '%m' )
+    </select>
+
+</mapper>

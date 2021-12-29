@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.WorkOrderInProcessDetailsQueryReportMapper">
+
+    <select id="list" resultType="com.ruike.hme.domain.vo.WorkOrderInProcessDetailsQueryReportVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        select src.*
+        from (SELECT
+        wo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mmt.MATERIAL_NAME,
+        wo.PRODUCTION_VERSION,
+        ig.item_group_code,
+        ig.item_group_description,
+        gtl.DESCRIPTION typedesc,
+        gsl.DESCRIPTION statusdesc,
+        pl.PROD_LINE_CODE,
+        pll.DESCRIPTION prodlinedesc,
+        ROUND( wo.QTY ) QTY,
+        ROUND( wa.RELEASED_QTY ) RELEASED_QTY,
+        ROUND( wa.COMPLETED_QTY ) COMPLETED_QTY,
+        substr(eo.IDENTIFICATION,3,4) product_type,
+        eo.EO_ID,
+        eo.EO_NUM,
+        eo.IDENTIFICATION,
+        rs.STEP_NAME,
+        rsl.DESCRIPTION rsdesc,
+        mw.WORKCELL_CODE,
+        mwl.WORKCELL_NAME mwdesc,
+        sa.WORKING_DATE,
+        DATE_FORMAT(sa.WORKING_DATE,'%Y-%m-%d %H:%i:%S') WORKING_DATE_STR,
+        sa.COMPLETED_DATE,
+        DATE_FORMAT(sa.COMPLETED_DATE,'%Y-%m-%d %H:%i:%S') COMPLETED_DATE_STR,
+        TIMESTAMPDIFF( SECOND, sa.WORKING_DATE, sa.COMPLETED_DATE ) / 60 time_difference,
+        sa.LAST_UPDATED_BY,
+        CASE
+        WHEN IFNULL(attr.attr_value, '' ) = '' THEN
+        'N' ELSE 'Y'
+        END AF_FLAG,
+        CASE
+        WHEN IFNULL( sa.REWORK_STEP_FLAG, '' ) = '' THEN
+        'N' ELSE 'Y'
+        END REWORK_STEP_FLAG,
+        mml.QUALITY_STATUS,
+        ifnull(mml.freeze_flag,'') freeze_flag,
+        sn_mm.MATERIAL_CODE sn_MATERIAL_CODE,
+        sn_mm.MATERIAL_NAME sn_MATERIAL_NAME,
+        prc.WORKCELL_CODE process_code,
+        prcl.WORKCELL_Name process_name,
+        case when eo.MATERIAL_ID != wo.MATERIAL_ID then 'Y' else 'N' end transform_flag,
+        (SELECT GROUP_CONCAT(mnct.DESCRIPTION SEPARATOR';')
+        from
+        mt_nc_record nc_p,
+        mt_nc_record nc_s,
+        mt_nc_code mnc,
+        mt_nc_code_tl mnct
+        where eo.EO_ID = nc_p.eo_id
+        and nc_p.PARENT_NC_RECORD_ID = ''
+        and nc_s.PARENT_NC_RECORD_ID = nc_p.NC_RECORD_ID
+        and mnc.nc_code_id = nc_s.NC_CODE_ID
+        and mnct.NC_CODE_ID = mnc.NC_CODE_ID
+        and mnct.LANG = #{lang}
+        group by nc_p.NC_RECORD_ID
+        ,nc_p.creation_date
+        order by nc_p.creation_date desc
+        limit 1) latest_nc_tag,
+        (
+        SELECT
+        GROUP_CONCAT(llc.lab_code SEPARATOR';')
+        FROM
+        hme_material_lot_lab_code llc
+        WHERE
+        llc.tenant_id = #{tenantId}
+        AND llc.material_lot_id = mml.material_lot_id
+        ) lab_code,
+        mea.ATTR_VALUE rework_material_lot_code
+        FROM
+        mt_eo eo
+        left join mt_eo_attr mea on mea.EO_ID = eo.EO_ID
+        and mea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+        and mea.TENANT_ID = #{tenantId}
+        LEFT JOIN mt_material_lot rmml ON rmml.MATERIAL_LOT_CODE = mea.ATTR_VALUE AND rmml.TENANT_ID = #{tenantId}
+        LEFT JOIN mt_material_lot_attr attr ON attr.MATERIAL_LOT_ID = rmml.MATERIAL_LOT_ID AND attr.ATTR_NAME = 'AF_FLAG'
+        JOIN mt_work_order wo ON eo.work_order_id = wo.work_order_id
+        AND wo.TENANT_ID = #{tenantId}
+        JOIN mt_work_order_actual wa ON wa.work_order_id = wo.work_order_id and wa.tenant_id = wo.tenant_id
+        JOIN mt_eo_router_actual ra ON ra.eo_id = eo.eo_id
+        JOIN mt_gen_type gt ON gt.TYPE_GROUP = 'WO_TYPE'
+        AND wo.WORK_ORDER_TYPE = gt.TYPE_CODE
+        AND gt.MODULE = 'ORDER'
+        JOIN mt_gen_type_tl gtl ON gtl.gen_type_id = gt.GEN_TYPE_ID
+        AND gtl.LANG = #{lang}
+        JOIN mt_gen_status gs ON gs.STATUS_GROUP = 'WO_STATUS'
+        AND gs.STATUS_CODE = wo.`STATUS`
+        AND gs.MODULE = 'ORDER'
+        JOIN mt_gen_status_tl gsl ON gsl.GEN_STATUS_ID = gs.GEN_STATUS_ID
+        AND gsl.LANG = #{lang}
+        JOIN mt_eo_step_actual sa ON sa.eo_router_actual_id = ra.eo_router_actual_id
+        JOIN mt_eo_step_wip wp ON sa.eo_step_actual_id = wp.eo_step_actual_id and wp.tenant_id = eo.tenant_id
+        JOIN mt_router_step rs ON rs.router_step_id = sa.router_step_id
+        JOIN mt_router_step_tl rsl ON rsl.ROUTER_STEP_ID = rs.ROUTER_STEP_ID
+        AND rsl.LANG = #{lang}
+        JOIN mt_mod_workcell mw ON wp.workcell_id = mw.workcell_id
+        LEFT JOIN mt_mod_workcell_tl mwl ON mwl.WORKCELL_ID = mw.WORKCELL_ID
+        AND mwl.LANG = #{lang}
+        JOIN mt_material mm ON mm.MATERIAL_ID = wo.MATERIAL_ID
+        JOIN mt_material_tl mmt ON mmt.MATERIAL_ID = mm.MATERIAL_ID
+        AND mmt.LANG = #{lang}
+        JOIN mt_material_site mms ON mms.MATERIAL_id = mm.MATERIAL_ID AND mms.site_id = #{dto.siteId}
+        LEFT JOIN mt_material_basic mb ON mb.material_site_id = mms.material_site_id
+        LEFT JOIN wms_item_group ig ON ig.item_group_code = mb.item_group
+        left join mt_material_lot mml on eo.IDENTIFICATION = mml.MATERIAL_LOT_CODE
+        and mml.ENABLE_FLAG = 'Y'
+        join mt_material sn_mm on sn_mm.material_id = eo.material_id
+        join mt_mod_organization_rel mor on mor.organization_id = mw.workcell_id
+        and mor.organization_type = 'WORKCELL'
+        and mor.parent_organization_type = 'WORKCELL'
+        and mor.top_site_id = wo.site_id
+        JOIN mt_mod_organization_rel mor2 ON mor2.TOP_SITE_ID = mor.top_site_id
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = #{tenantId}
+        JOIN mt_mod_organization_rel mor3 ON mor3.TOP_SITE_ID = mor2.top_site_id
+        AND mor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor3.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mor3.TENANT_ID = #{tenantId}
+        JOIN mt_mod_workcell prc on mor.parent_organization_id = prc.workcell_id
+        left JOIN mt_mod_workcell_tl prcl ON prcl.WORKCELL_ID = prc.WORKCELL_ID AND prcl.LANG = #{lang}
+        JOIN mt_mod_production_line pl ON mor3.parent_organization_id = pl.prod_line_id
+        LEFT JOIN mt_mod_production_line_tl pll ON pll.PROD_LINE_ID = pl.PROD_LINE_ID
+        AND pll.LANG = #{lang}
+        WHERE
+        eo.STATUS = 'WORKING'
+        and eo.tenant_id = #{tenantId}
+        <if test="dto.workOrderNumList!=null and dto.workOrderNumList.size() > 0">
+            AND wo.WORK_ORDER_NUM IN (
+            <foreach collection="dto.workOrderNumList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.materialId!=null and dto.materialId.size() > 0">
+            AND mm.MATERIAL_id IN (
+            <foreach collection="dto.materialId" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.prodLineId!=null">
+            AND pl.PROD_LINE_ID = #{dto.prodLineId}
+        </if>
+        <if test="dto.snList!=null and dto.snList.size() > 0">
+            AND eo.IDENTIFICATION IN (
+            <foreach collection="dto.snList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.processList!=null and dto.processList.size() > 0">
+            AND prc.workcell_id IN (
+            <foreach collection="dto.processList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.workcellList!=null and dto.workcellList.size() > 0">
+            AND mw.WORKCELL_ID IN (
+            <foreach collection="dto.workcellList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.woStatus != null">
+            and wo.status = #{dto.woStatus}
+        </if>
+        <if test="dto.qualityStatus != null">
+            and mml.quality_status = #{dto.qualityStatus}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'Y'.toString()">
+            and mml.freeze_flag = #{dto.freezeFlag}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'N'.toString()">
+            and (
+                mml.freeze_flag = #{dto.freezeFlag}
+                or mml.freeze_flag = ''
+                or mml.freeze_flag = null
+                )
+        </if>
+        <if test="dto.realName != null">
+            and sa.LAST_UPDATED_BY = #{dto.realName}
+        </if>
+        <if test="dto.transformFlag != null">
+            <choose>
+                <when test='dto.transformFlag == "Y"'>
+                    and eo.MATERIAL_ID != wo.MATERIAL_ID
+                </when>
+                <when test='dto.transformFlag == "N"'>
+                    and eo.MATERIAL_ID = wo.MATERIAL_ID
+                </when>
+            </choose>
+        </if>
+        <if test="dto.reworkMaterialLotCodeList != null and dto.reworkMaterialLotCodeList.size() > 0">
+            and mea.attr_value IN
+            <foreach collection="dto.reworkMaterialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.afFlag != null and dto.afFlag != ''">
+            <choose>
+                <when test='dto.afFlag == "Y"'>
+                    and attr.attr_value = #{dto.afFlag}
+                </when>
+                <when test='dto.afFlag == "N"'>
+                    and (attr.attr_value is null OR  attr.attr_value = '')
+                </when>
+            </choose>
+        </if>
+        ) src
+        where 1=1
+        <if test="dto.latestNcTag != null and dto.latestNcTag != ''">
+            <bind name="latestNcTagLike" value="dto.latestNcTag+'%'"/>
+            and src.latest_nc_tag like #{latestNcTagLike}
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and src.lab_code like CONCAT(#{dto.labCode}, '%')
+        </if>
+        <if test="dto.productMatch != null">
+            and src.product_type like #{dto.productMatch}
+        </if>
+        ORDER BY
+        src.WORK_ORDER_NUM,
+        src.EO_ID
+    </select>
+
+</mapper>

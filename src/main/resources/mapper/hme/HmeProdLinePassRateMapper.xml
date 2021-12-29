@@ -1,0 +1,1097 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeProdLinePassRateMapper">
+
+    <select id="dateSlotQuery" resultType="com.ruike.hme.api.dto.HmeProdLinePassRateDTO">
+        select min(hejs.site_out_date) as date_from, max(hejs.site_out_date) as date_to
+        from hme_eo_job_sn hejs
+        where hejs.tenant_id = #{tenantId}
+        and hejs.rework_flag = 'N'
+        and hejs.site_out_date is not null
+        and hejs.site_out_date != ''
+    </select>
+
+    <select id="processQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        select mmor.PARENT_ORGANIZATION_ID as organization_id,mmw.WORKCELL_NAME as organization_name, mmwa.ATTR_VALUE
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_mod_workcell mmw
+        on mmw.WORKCELL_ID = PARENT_ORGANIZATION_ID
+        left join mt_mod_workcell_attr mmwa
+        on mmwa.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+        and mmwa.ATTR_NAME = 'SEQUENCE'
+        <if test="dto.areaId != null and dto.areaId != ''">
+            left join mt_work_order_attr mwoa
+            on mwoa.WORK_ORDER_ID = hejs.WORK_ORDER_ID
+            and mwoa.ATTR_NAME = 'attribute4'
+            left join mt_mod_area mma
+            on mma.TENANT_ID = hejs.tenant_id
+            and mma.AREA_CODE = mwoa.ATTR_VALUE
+        </if>
+        <if test="dto.lineWorkCellIdList != null and dto.lineWorkCellIdList.size() > 0">
+            left join mt_mod_organization_rel mmor2
+            on mmor2.TENANT_ID = hejs.tenant_id
+            and mmor2.ORGANIZATION_ID = mmor.PARENT_ORGANIZATION_ID
+            and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and hejs.rework_flag = 'N'
+        and mmor.PARENT_ORGANIZATION_ID is not null
+        and mmwa.ATTR_VALUE is not null
+        and mmwa.ATTR_VALUE != ''
+        <if test="dto.areaId != null and dto.areaId != ''">
+            and mma.AREA_ID = #{dto.areaId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lineWorkCellIdList != null and dto.lineWorkCellIdList.size() > 0">
+            and mmor2.PARENT_ORGANIZATION_ID in
+            <foreach collection="dto.lineWorkCellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processIdList != null and dto.processIdList.size() > 0">
+            and mmor.PARENT_ORGANIZATION_ID in
+            <foreach collection="dto.processIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        GROUP BY mmor.PARENT_ORGANIZATION_ID, mmw.WORKCELL_NAME, mmwa.ATTR_VALUE
+        order by (mmwa.ATTR_VALUE+0)
+    </select>
+
+    <select id="prodLineQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO10">
+        select mmor.ORGANIZATION_ID as process_id, mmpl.PROD_LINE_ID, mmpl.PROD_LINE_NAME
+        from mt_mod_organization_rel mmor
+        left join mt_mod_organization_rel mmor2
+        on mmor2.ORGANIZATION_ID = mmor.PARENT_ORGANIZATION_ID
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mmor2.PARENT_ORGANIZATION_ID
+        where mmor.TENANT_ID = #{tenantId}
+        and mmor.ORGANIZATION_ID in
+        <foreach collection="processIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        group by mmor.ORGANIZATION_ID, mmpl.PROD_LINE_ID
+    </select>
+
+    <select id="materialQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO9">
+        select mmor.PARENT_ORGANIZATION_ID as process_id, mwo.MATERIAL_ID, mm.MATERIAL_CODE
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = hejs.work_order_id
+        left join mt_material mm
+        on mm.MATERIAL_ID = mwo.MATERIAL_ID
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and hejs.rework_flag = 'N'
+        and mmor.PARENT_ORGANIZATION_ID in
+        <foreach collection="processIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and mwo.MATERIAL_ID is not null
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and mwo.SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        group by mmor.PARENT_ORGANIZATION_ID, mwo.MATERIAL_ID
+    </select>
+
+    <select id="productionNumQuery" resultType="java.lang.Long">
+        select count(DISTINCT(hejs.eo_id))
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = hejs.work_order_id
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and hejs.rework_flag = 'N'
+        and hejs.eo_id is not NULL
+        and hejs.eo_id != ''
+        and mmor.PARENT_ORGANIZATION_ID = #{processId}
+        and mwo.MATERIAL_ID = #{materialId}
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and mwo.SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+    </select>
+
+    <select id="passNumQuery" resultType="java.lang.String">
+        select DISTINCT(me.IDENTIFICATION)
+        from (
+            select DISTINCT(hejs.eo_id) eo_id,
+                    (
+                    SELECT NC_RECORD_ID
+                    FROM mt_nc_record
+                    WHERE EO_ID = hejs.eo_id
+                    ORDER BY CREATION_DATE ASC
+                    LIMIT 1
+                    ) NC_RECORD_ID
+            from hme_eo_job_sn hejs
+            left join mt_mod_organization_rel mmor
+            on mmor.ORGANIZATION_ID = hejs.workcell_id
+            and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+            <if test="dto.labCode != null and dto.labCode != ''">
+                left join mt_eo me2
+                on me2.eo_id = hejs.eo_id
+                left join mt_material_lot mml
+                on mml.TENANT_ID = hejs.tenant_id
+                and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+                left join hme_material_lot_lab_code hmllc
+                on hmllc.tenant_id = hejs.tenant_id
+                and hmllc.material_lot_id = mml.material_lot_id
+            </if>
+            <if test="dto.productType != '____'">
+                left join mt_eo me3
+                on me3.eo_id = hejs.eo_id
+            </if>
+            where hejs.tenant_id = #{tenantId}
+            and hejs.site_out_date >= #{dto.dateFrom}
+            and hejs.site_out_date &lt;= #{dto.dateTo}
+            and hejs.rework_flag = 'N'
+            and hejs.eo_id is not NULL
+            and hejs.eo_id != ''
+            and mmor.PARENT_ORGANIZATION_ID = #{processId}
+            and mwo.MATERIAL_ID = #{materialId}
+            <if test="dto.siteId != null and dto.siteId != ''">
+                and mwo.SITE_ID = #{dto.siteId}
+            </if>
+            <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+                and mwo.MATERIAL_ID in
+                <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+                and hejs.WORK_ORDER_ID in
+                <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="dto.labCode != null and dto.labCode != ''">
+                and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+            </if>
+            <if test="dto.productType != '____'">
+                and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+            </if>) t
+        left join mt_nc_record mnr
+        on mnr.NC_RECORD_ID = t.NC_RECORD_ID
+        left join mt_nc_group mng
+        on mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        left join mt_eo me
+        on me.EO_ID = t.eo_id
+        where (mnr.NC_RECORD_ID is null or mng.COMPONENT_REQUIRED = 'Y')
+    </select>
+
+    <select id="ncNumQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO4">
+        select t2.NC_RECORD_ID, mnr.WORKCELL_ID AS found_workcell_id, mmw1.WORKCELL_NAME AS found_workcell_name,
+        mnr.ROOT_CAUSE_WORKCELL_ID AS responsed_workcell_id, mmw2.WORKCELL_NAME AS responsed_workcell_name,
+        mnr.NC_TYPE, mnc.DESCRIPTION,mnc2.DESCRIPTION AS nc_code, mnr.NC_STATUS, mml.MATERIAL_LOT_CODE,
+        mnr.MATERIAL_ID, mm.MATERIAL_NAME, mnr.COMMENTS, me.IDENTIFICATION,mnr2.COMMENTS AS dispose_opinion,
+        mnr.USER_ID, mnr.DATE_TIME, mnr2.CLOSED_USER_ID, mnr2.CLOSED_DATE_TIME, mgt.DESCRIPTION as nc_type_meaning,
+        mgs.DESCRIPTION as nc_status_meaning, nc_user.real_name as user_name, close_user.real_name as closed_user_name
+        from (
+        select t.eo_id,
+        (
+            SELECT
+            mnr.NC_RECORD_ID
+            FROM
+            mt_nc_record mnr,
+            mt_mod_organization_rel mmor
+            WHERE
+            mnr.EO_ID = t.eo_id
+            and mmor.ORGANIZATION_ID = mnr.WORKCELL_ID
+            and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+            and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+            and mmor.PARENT_ORGANIZATION_ID = #{processId}
+            ORDER BY
+            mnr.CREATION_DATE ASC
+            LIMIT 1
+        ) NC_RECORD_ID
+        from (
+        select DISTINCT(hejs.eo_id) eo_id
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = hejs.work_order_id
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me3
+            on me3.eo_id = hejs.eo_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and hejs.rework_flag = 'N'
+        and mmor.PARENT_ORGANIZATION_ID = #{processId}
+        and mwo.MATERIAL_ID = #{materialId}
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and mwo.SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>) t
+        WHERE EXISTS (
+        SELECT 1 FROM mt_nc_record WHERE eo_id = t.eo_id and PARENT_NC_RECORD_ID = ''
+        ) ) t2
+        left join mt_nc_record mnr
+        on mnr.NC_RECORD_ID = t2.NC_RECORD_ID
+        left join mt_nc_group mng
+        on mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        left join mt_mod_workcell mmw1
+        on mmw1.WORKCELL_ID = mnr.WORKCELL_ID
+        left join mt_mod_workcell mmw2
+        on mmw2.WORKCELL_ID = mnr.ROOT_CAUSE_WORKCELL_ID
+        left join mt_nc_code mnc
+        on mnc.NC_CODE_ID = mnr.NC_CODE_ID
+        left join mt_nc_record mnr2
+        on mnr2.PARENT_NC_RECORD_ID = mnr.NC_RECORD_ID
+        left join mt_nc_code mnc2
+        on mnc2.NC_CODE_ID = mnr2.NC_CODE_ID
+        left join mt_material_lot mml
+        on mml.MATERIAL_LOT_ID = mnr.MATERIAL_LOT_ID
+        left join mt_material mm
+        on mm.MATERIAL_ID = mnr.MATERIAL_ID
+        left join mt_eo me
+        on me.eo_id = mnr.eo_id
+        left join mt_gen_type mgt
+        on mgt.TENANT_ID = #{tenantId}
+        and mgt.MODULE = 'NC_CODE'
+        and mgt.TYPE_GROUP = 'NC'
+        and mgt.TYPE_CODE = mnr.NC_TYPE
+        left join mt_gen_status mgs
+        on mgs.TENANT_ID = mgt.TENANT_ID
+        and mgs.MODULE = 'NC_RECORD'
+        and mgs.STATUS_GROUP = 'NC_RECORD_STATUS'
+        and mgs.STATUS_CODE = mnr.NC_STATUS
+        left join hzero_platform.iam_user nc_user
+        on nc_user.id = mnr.USER_ID
+        left join hzero_platform.iam_user close_user
+        on close_user.id = mnr2.CLOSED_USER_ID
+        where mng.COMPONENT_REQUIRED = 'N'
+    </select>
+
+    <select id="processDayQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        select mmor.PARENT_ORGANIZATION_ID as organization_id,mmw.WORKCELL_NAME as organization_name, mmwa.ATTR_VALUE
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_mod_workcell mmw
+        on mmw.WORKCELL_ID = PARENT_ORGANIZATION_ID
+        left join mt_mod_workcell_attr mmwa
+        on mmwa.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+        and mmwa.ATTR_NAME = 'SEQUENCE'
+        <if test="dto.areaId != null and dto.areaId != ''">
+            left join mt_work_order_attr mwoa
+            on mwoa.WORK_ORDER_ID = hejs.WORK_ORDER_ID
+            and mwoa.ATTR_NAME = 'attribute4'
+            left join mt_mod_area mma
+            on mma.TENANT_ID = hejs.tenant_id
+            and mma.AREA_CODE = mwoa.ATTR_VALUE
+        </if>
+        <if test="dto.lineWorkCellIdList != null and dto.lineWorkCellIdList.size() > 0">
+            left join mt_mod_organization_rel mmor2
+            on mmor2.TENANT_ID = hejs.tenant_id
+            and mmor2.ORGANIZATION_ID = mmor.PARENT_ORGANIZATION_ID
+            and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dateFrom}
+        and hejs.site_out_date &lt;= #{dateTo}
+        and hejs.rework_flag = 'N'
+        and mmor.PARENT_ORGANIZATION_ID is not null
+        and mmwa.ATTR_VALUE is not null
+        and mmwa.ATTR_VALUE != ''
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and mmor.TOP_SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.areaId != null and dto.areaId != ''">
+            and mma.AREA_ID = #{dto.areaId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lineWorkCellIdList != null and dto.lineWorkCellIdList.size() > 0">
+            and mmor2.PARENT_ORGANIZATION_ID in
+            <foreach collection="dto.lineWorkCellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processIdList != null and dto.processIdList.size() > 0">
+            and mmor.PARENT_ORGANIZATION_ID in
+            <foreach collection="dto.processIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        GROUP BY mmor.PARENT_ORGANIZATION_ID, mmw.WORKCELL_NAME, mmwa.ATTR_VALUE
+        order by (mmwa.ATTR_VALUE+0)
+    </select>
+
+    <select id="shiftQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        select mws.WKC_SHIFT_ID as organization_id, CONCAT(mws.SHIFT_DATE, ' ', mws.SHIFT_CODE) as organization_name
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_wkc_shift mws
+        on mws.WKC_SHIFT_ID = hejs.shift_id
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and mmor.PARENT_ORGANIZATION_ID = #{processId}
+        and hejs.shift_id is not null
+        and hejs.shift_id != ''
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        group by mws.WKC_SHIFT_ID
+    </select>
+
+    <select id="productionNumDayQuery" resultType="java.lang.Long">
+        select count(DISTINCT(hejs.eo_id))
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me
+            on me.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dateFrom}
+        and hejs.site_out_date &lt;= #{dateTo}
+        and hejs.rework_flag = 'N'
+        and hejs.eo_id is not NULL
+        and hejs.eo_id != ''
+        and mmor.PARENT_ORGANIZATION_ID = #{processId}
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me2.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+    </select>
+
+    <select id="passNumDayQuery" resultType="java.lang.String">
+        select DISTINCT(me.IDENTIFICATION)
+        from (
+        SELECT
+        DISTINCT(hejs.eo_id) eo_id,
+        (
+        SELECT NC_RECORD_ID
+        FROM mt_nc_record
+        WHERE EO_ID = hejs.eo_id
+        ORDER BY CREATION_DATE ASC
+        LIMIT 1
+        ) NC_RECORD_ID
+        FROM
+        hme_eo_job_sn hejs
+        LEFT JOIN mt_mod_organization_rel mmor ON mmor.ORGANIZATION_ID = hejs.workcell_id
+        AND mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me3
+            on me3.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        WHERE
+        hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dateFrom}
+        and hejs.site_out_date &lt;= #{dateTo}
+        and hejs.rework_flag = 'N'
+        AND hejs.eo_id IS NOT NULL
+        AND hejs.eo_id != ''
+        AND mmor.PARENT_ORGANIZATION_ID =#{processId}
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        ) a
+        LEFT JOIN mt_nc_record mnr ON mnr.NC_RECORD_ID = a.NC_RECORD_ID
+        LEFT JOIN mt_nc_group mng ON mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        LEFT JOIN mt_eo me ON me.EO_ID = a.eo_id
+        where (mnr.NC_RECORD_ID is null or mng.COMPONENT_REQUIRED = 'Y')
+    </select>
+
+    <select id="ncNumDayQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO4">
+        select t2.NC_RECORD_ID, mnr.WORKCELL_ID AS found_workcell_id, mmw1.WORKCELL_NAME AS found_workcell_name,
+        mnr.ROOT_CAUSE_WORKCELL_ID AS responsed_workcell_id, mmw2.WORKCELL_NAME AS responsed_workcell_name,
+        mnr.NC_TYPE, mnc.DESCRIPTION,mnc2.DESCRIPTION AS nc_code, mnr.NC_STATUS, mml.MATERIAL_LOT_CODE,
+        mnr.MATERIAL_ID, mm.MATERIAL_NAME, mnr.COMMENTS, me.IDENTIFICATION,mnr2.COMMENTS AS dispose_opinion,
+        mnr.USER_ID, mnr.DATE_TIME, mnr2.CLOSED_USER_ID, mnr2.CLOSED_DATE_TIME, mgt.DESCRIPTION as nc_type_meaning,
+        mgs.DESCRIPTION as nc_status_meaning, nc_user.real_name as user_name, close_user.real_name as closed_user_name
+        from (
+        select t.eo_id,
+        (
+        SELECT NC_RECORD_ID
+        FROM mt_nc_record
+        WHERE EO_ID = t.eo_id
+        ORDER BY CREATION_DATE ASC
+        LIMIT 1
+        ) NC_RECORD_ID
+        from (
+        select DISTINCT(hejs.eo_id) eo_id
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me3
+            on me3.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dateFrom}
+        and hejs.site_out_date &lt;= #{dateTo}
+        and hejs.rework_flag = 'N'
+        and mmor.PARENT_ORGANIZATION_ID = #{processId}
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>) t
+        WHERE EXISTS (
+        SELECT 1 FROM mt_nc_record WHERE eo_id = t.eo_id and PARENT_NC_RECORD_ID = ''
+        ) ) t2
+        left join mt_nc_record mnr
+        on mnr.NC_RECORD_ID = t2.NC_RECORD_ID
+        left join mt_nc_group mng
+        on mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        left join mt_mod_workcell mmw1
+        on mmw1.WORKCELL_ID = mnr.WORKCELL_ID
+        left join mt_mod_workcell mmw2
+        on mmw2.WORKCELL_ID = mnr.ROOT_CAUSE_WORKCELL_ID
+        left join mt_nc_code mnc
+        on mnc.NC_CODE_ID = mnr.NC_CODE_ID
+        left join mt_nc_record mnr2
+        on mnr2.PARENT_NC_RECORD_ID = mnr.NC_RECORD_ID
+        left join mt_nc_code mnc2
+        on mnc2.NC_CODE_ID = mnr2.NC_CODE_ID
+        left join mt_material_lot mml
+        on mml.MATERIAL_LOT_ID = mnr.MATERIAL_LOT_ID
+        left join mt_material mm
+        on mm.MATERIAL_ID = mnr.MATERIAL_ID
+        left join mt_eo me
+        on me.eo_id = mnr.eo_id
+        left join mt_gen_type mgt
+        on mgt.TENANT_ID = #{tenantId}
+        and mgt.MODULE = 'NC_CODE'
+        and mgt.TYPE_GROUP = 'NC'
+        and mgt.TYPE_CODE = mnr.NC_TYPE
+        left join mt_gen_status mgs
+        on mgs.TENANT_ID = mgt.TENANT_ID
+        and mgs.MODULE = 'NC_RECORD'
+        and mgs.STATUS_GROUP = 'NC_RECORD_STATUS'
+        and mgs.STATUS_CODE = mnr.NC_STATUS
+        left join hzero_platform.iam_user nc_user
+        on nc_user.id = mnr.USER_ID
+        left join hzero_platform.iam_user close_user
+        on close_user.id = mnr2.CLOSED_USER_ID
+        where mng.COMPONENT_REQUIRED = 'N'
+    </select>
+
+    <select id="processByIdQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        select mmw.WORKCELL_ID AS organization_id, mmw.WORKCELL_NAME AS organization_name, mmwa.ATTR_VALUE
+        from mt_mod_workcell mmw,
+             mt_mod_workcell_attr mmwa
+        where FIND_IN_SET(mmw.WORKCELL_ID, #{processId} )
+        and mmwa.WORKCELL_ID = mmw.WORKCELL_ID
+        and mmwa.ATTR_NAME = 'SEQUENCE'
+        and mmwa.ATTR_VALUE is not null
+        and mmwa.ATTR_VALUE != ''
+        GROUP BY mmw.WORKCELL_ID, mmw.WORKCELL_NAME, mmwa.ATTR_VALUE
+        order by (mmwa.ATTR_VALUE+0)
+    </select>
+
+    <select id="processByLineWorkcellQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        SELECT
+            mmw.WORKCELL_ID AS organization_id,
+            mmw.WORKCELL_NAME AS organization_name,
+            mmwa.ATTR_VALUE
+        FROM
+            mt_mod_organization_rel mmor,
+            mt_mod_workcell mmw,
+            mt_mod_workcell_attr mmwa
+        WHERE
+            mmor.TENANT_ID = #{tenantId}
+        AND FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID,#{lineWorkcellId})
+        AND mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmw.WORKCELL_ID = mmor.ORGANIZATION_ID
+        AND mmw.WORKCELL_TYPE = 'PROCESS'
+        AND mmw.ENABLE_FLAG = 'Y'
+        AND mmwa.WORKCELL_ID = mmw.WORKCELL_ID
+        AND mmwa.ATTR_NAME = 'SEQUENCE'
+        AND mmwa.ATTR_VALUE IS NOT NULL
+        AND mmwa.ATTR_VALUE != ''
+        GROUP BY mmw.WORKCELL_ID, mmw.WORKCELL_NAME, mmwa.ATTR_VALUE
+        ORDER BY (mmwa.ATTR_VALUE + 0)
+    </select>
+
+    <select id="processByProdLineQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        select 	mmw.WORKCELL_ID AS organization_id, mmw.WORKCELL_NAME AS organization_name, mmwa.ATTR_VALUE
+        from mt_mod_organization_rel mmor,
+             mt_mod_organization_rel mmor2,
+             mt_mod_workcell mmw,
+			 mt_mod_workcell_attr mmwa
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID , #{prodLineId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor2.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'PROCESS'
+        and mmw.ENABLE_FLAG = 'Y'
+		AND mmwa.WORKCELL_ID = mmw.WORKCELL_ID
+ 	    AND mmwa.ATTR_NAME = 'SEQUENCE'
+		AND mmwa.ATTR_VALUE IS NOT NULL
+     	AND mmwa.ATTR_VALUE != ''
+        GROUP BY mmw.WORKCELL_ID, mmwa.ATTR_VALUE
+        ORDER BY(mmwa.ATTR_VALUE + 0)
+    </select>
+
+    <select id="processByDepartmentQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO3">
+        SELECT mmw.WORKCELL_ID AS organization_id, mmw.WORKCELL_NAME AS organization_name, mmwa.ATTR_VALUE
+        from mt_mod_organization_rel mmor,
+             mt_mod_organization_rel mmor2,
+             mt_mod_organization_rel mmor3,
+             mt_mod_organization_rel mmor4,
+             mt_mod_workcell mmw,
+             mt_mod_workcell_attr mmwa
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID , #{departmentId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'AREA'
+        and mmor.ORGANIZATION_TYPE = 'AREA'
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'AREA'
+        and mmor2.ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor3.PARENT_ORGANIZATION_ID = mmor2.ORGANIZATION_ID
+        and mmor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor3.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor4.PARENT_ORGANIZATION_ID = mmor3.ORGANIZATION_ID
+        and mmor4.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor4.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor4.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'PROCESS'
+        and mmw.ENABLE_FLAG = 'Y'
+        AND mmwa.WORKCELL_ID = mmw.WORKCELL_ID
+        AND mmwa.ATTR_NAME = 'SEQUENCE'
+        AND mmwa.ATTR_VALUE IS NOT NULL
+        AND mmwa.ATTR_VALUE != ''
+        GROUP BY mmw.WORKCELL_ID, mmwa.ATTR_VALUE
+        ORDER BY(mmwa.ATTR_VALUE + 0)
+    </select>
+
+    <select id="getEoByProcessAndMaterial" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO11">
+        select mmor.PARENT_ORGANIZATION_ID as process_id, mwo.MATERIAL_ID, me.EO_ID, me.IDENTIFICATION
+        from hme_eo_job_sn hejs
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = hejs.workcell_id
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = hejs.work_order_id
+        left join mt_eo me
+        on me.EO_ID = hejs.eo_id
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me3
+            on me3.eo_id = hejs.eo_id
+        </if>
+        where hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dto.dateFrom}
+        and hejs.site_out_date &lt;= #{dto.dateTo}
+        and hejs.rework_flag = 'N'
+        and hejs.eo_id is not NULL
+        and hejs.eo_id != ''
+        and (mmor.PARENT_ORGANIZATION_ID, mwo.MATERIAL_ID) in
+        <foreach collection="processMaterialList" separator="," item="item" open="(" close=")">
+            (#{item.processId} , #{item.materialId})
+        </foreach>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and mwo.SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+        group by mmor.PARENT_ORGANIZATION_ID, mwo.MATERIAL_ID, me.EO_ID, me.IDENTIFICATION
+    </select>
+
+    <select id="ncRecordByEoQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO12">
+        SELECT
+            mnr.EO_ID,
+            mmor.PARENT_ORGANIZATION_ID as process_id,
+            mnr.NC_RECORD_ID,
+            hmra.process_method,
+            mng.COMPONENT_REQUIRED,
+            mnr.CREATION_DATE
+        FROM
+            mt_nc_record mnr
+            left join hme_nc_record_attr hmra on hmra.parent_record_id = mnr.NC_RECORD_ID,
+            mt_nc_group mng,
+            mt_mod_organization_rel mmor
+        WHERE
+            mnr.TENANT_ID = #{tenantId}
+        AND (
+            mnr.PARENT_NC_RECORD_ID IS NULL
+            OR mnr.PARENT_NC_RECORD_ID = ''
+        )
+        AND mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        AND mmor.ORGANIZATION_ID = mnr.WORKCELL_ID
+        AND mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND (mnr.EO_ID, mmor.PARENT_ORGANIZATION_ID) in
+        <foreach collection="eoProcessList" separator="," item="item" open="(" close=")">
+            (#{item.eoId} , #{item.processId})
+        </foreach>
+    </select>
+
+    <select id="ncRecordDetailQuery" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO4">
+        select mnr.NC_RECORD_ID, mnr.WORKCELL_ID AS found_workcell_id, mmw1.WORKCELL_NAME AS found_workcell_name,
+        mnr.ROOT_CAUSE_WORKCELL_ID AS responsed_workcell_id, mmw2.WORKCELL_NAME AS responsed_workcell_name,
+        mnr.NC_TYPE, mng.DESCRIPTION,mnc2.DESCRIPTION AS nc_code, mnr.NC_STATUS, mml.MATERIAL_LOT_CODE,
+        mnr.MATERIAL_ID, mm.MATERIAL_NAME, mnr.COMMENTS, me.IDENTIFICATION,mnr2.COMMENTS AS dispose_opinion,
+        mnr.USER_ID, mnr.DATE_TIME, mnr2.CLOSED_USER_ID, mnr2.CLOSED_DATE_TIME, mgtt.DESCRIPTION as nc_type_meaning,
+        mgs.DESCRIPTION as nc_status_meaning, nc_user.real_name as user_name, close_user.real_name as closed_user_name
+        from mt_nc_record mnr
+        left join mt_nc_group mng
+        on mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        left join mt_mod_workcell mmw1
+        on mmw1.WORKCELL_ID = mnr.WORKCELL_ID
+        left join mt_mod_workcell mmw2
+        on mmw2.WORKCELL_ID = mnr.ROOT_CAUSE_WORKCELL_ID
+        left join mt_nc_code mnc
+        on mnc.NC_CODE_ID = mnr.NC_CODE_ID
+        left join mt_nc_record mnr2
+        on mnr2.PARENT_NC_RECORD_ID = mnr.NC_RECORD_ID
+        left join mt_nc_code mnc2
+        on mnc2.NC_CODE_ID = mnr2.NC_CODE_ID
+        left join mt_material_lot mml
+        on mml.MATERIAL_LOT_ID = mnr.MATERIAL_LOT_ID
+        left join mt_material mm
+        on mm.MATERIAL_ID = mnr.MATERIAL_ID
+        left join mt_eo me
+        on me.eo_id = mnr.eo_id
+        left join mt_gen_type mgt
+        on mgt.TENANT_ID = #{tenantId}
+        and mgt.MODULE = 'NC_CODE'
+        and mgt.TYPE_GROUP = 'NC'
+        and mgt.TYPE_CODE = mnr.NC_TYPE
+        left join mt_gen_type_tl mgtt
+        on mgtt.GEN_TYPE_ID = mgt.GEN_TYPE_ID
+        and mgtt.LANG = 'zh_CN'
+        left join mt_gen_status mgs
+        on mgs.TENANT_ID = mgt.TENANT_ID
+        and mgs.MODULE = 'NC_RECORD'
+        and mgs.STATUS_GROUP = 'NC_RECORD_STATUS'
+        and mgs.STATUS_CODE = mnr.NC_STATUS
+        left join hzero_platform.iam_user nc_user
+        on nc_user.id = mnr.USER_ID
+        left join hzero_platform.iam_user close_user
+        on close_user.id = mnr2.CLOSED_USER_ID
+        where mnr.NC_RECORD_ID in
+        <foreach collection="ncRecordIdList" separator="," item="id" open="(" close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getEoByProcess" resultType="com.ruike.hme.domain.vo.HmeProdLinePassRateVO13">
+        SELECT mmor.PARENT_ORGANIZATION_ID as processId, eo.EO_ID, eo.IDENTIFICATION, hejs.site_out_date
+        FROM
+        hme_eo_job_sn hejs
+        LEFT JOIN mt_mod_organization_rel mmor ON mmor.ORGANIZATION_ID = hejs.workcell_id
+        AND mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        LEFT JOIN mt_eo eo ON eo.EO_ID = hejs.eo_id
+        <if test="dto.labCode != null and dto.labCode != ''">
+            left join mt_eo me2
+            on me2.eo_id = hejs.eo_id
+            left join mt_material_lot mml
+            on mml.TENANT_ID = hejs.tenant_id
+            and mml.MATERIAL_LOT_CODE = me2.IDENTIFICATION
+            left join hme_material_lot_lab_code hmllc
+            on hmllc.tenant_id = hejs.tenant_id
+            and hmllc.material_lot_id = mml.material_lot_id
+        </if>
+        <if test="dto.productType != '____'">
+            left join mt_eo me3
+            on me3.eo_id = hejs.eo_id
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            left join mt_work_order mwo
+            on mwo.WORK_ORDER_ID = hejs.work_order_id
+        </if>
+        WHERE
+        hejs.tenant_id = #{tenantId}
+        and hejs.site_out_date >= #{dateFrom}
+        and hejs.site_out_date &lt;= #{dateTo}
+        and hejs.rework_flag = 'N'
+        AND hejs.eo_id IS NOT NULL
+        AND hejs.eo_id != ''
+        AND mmor.PARENT_ORGANIZATION_ID in
+        <foreach collection="processIdList" separator="," item="id" open="(" close=")">
+            #{id}
+        </foreach>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and mwo.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejs.workcell_id in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderIdList != null and dto.workOrderIdList.size() > 0">
+            and hejs.WORK_ORDER_ID in
+            <foreach collection="dto.workOrderIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and hmllc.lab_code like CONCAT('%',#{dto.labCode},'%')
+        </if>
+        <if test="dto.productType != '____'">
+            and me3.IDENTIFICATION like CONCAT('__',#{dto.productType},'%')
+        </if>
+    </select>
+</mapper>

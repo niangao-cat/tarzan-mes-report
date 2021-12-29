@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosReturnMapper">
+
+    <select id="queryRecordList" resultType="com.ruike.hme.domain.vo.HmeCosReturnVO">
+        SELECT
+        	mpl.PROD_LINE_CODE,
+        	wo.WORK_ORDER_NUM,
+        	mm.MATERIAL_CODE,
+        	mm.MATERIAL_NAME,
+        	mlr.wafer_num,
+        	attr.ATTR_VALUE COS_TYPE,
+        	mml.MATERIAL_LOT_CODE RETURN_MATERIAL_LOT_CODE,
+		    mlr.return_qty PRIMARY_UOM_QTY,
+        	cmm.MATERIAL_CODE COMPONENT_MATERIAL_CODE,
+        	cmm.MATERIAL_NAME COMPONENT_MATERIAL_NAME,
+        	mlr.ATTRIBUTE2 RETURN_TYPE,
+        	mu.UOM_CODE,
+			mlr.ATTRIBUTE5 USAGE_QTY,
+			mlr.target_material_lot_id,
+        	mmt.MATERIAL_LOT_CODE TARGET_MATERIAL_LOT_CODE,
+        	ms.SUPPLIER_NAME,
+        	attr2.ATTR_VALUE SUPPLIER_LOT,
+        	mml.lot,
+        	mnc.DESCRIPTION NC_DESCRIPTION,
+        	iu.real_name,
+        	date_format(mlr.creation_date, '%Y-%m-%d %H:%i:%S' ) CREATION_DATE,
+        	mmw.WORKCELL_CODE,
+        	mmw.WORKCELL_NAME
+        FROM
+        	hme_material_lot_return mlr
+        	LEFT JOIN mt_material_lot mml ON mml.MATERIAL_LOT_ID = mlr.return_material_lot_id
+        	LEFT JOIN mt_supplier ms ON ms.SUPPLIER_ID = mml.SUPPLIER_ID
+        	LEFT JOIN mt_material_lot_attr attr ON attr.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID AND attr.ATTR_NAME = 'COS_TYPE'
+        	LEFT JOIN mt_material_lot_attr attr2 ON attr2.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID AND attr2.ATTR_NAME = 'SUPPLIER_LOT'
+        	LEFT JOIN mt_material cmm ON cmm.material_id = mlr.ATTRIBUTE4
+        	LEFT JOIN mt_material_lot mmt ON mmt.material_lot_id = mlr.target_material_lot_id
+        	LEFT JOIN mt_nc_code mnc ON mnc.NC_CODE_ID = mlr.ATTRIBUTE3
+        	LEFT JOIN mt_mod_workcell mmw ON mmw.workcell_Id = mlr.ATTRIBUTE1
+        	LEFT JOIN hzero_platform.iam_user iu ON iu.id = mlr.CREATED_BY
+			LEFT JOIN mt_work_order wo ON wo.WORK_ORDER_ID = mlr.work_order_id,
+          	mt_mod_production_line mpl,
+        	mt_material mm
+        	LEFT JOIN mt_uom mu ON mu.UOM_ID = mm.PRIMARY_UOM_ID
+        WHERE
+        	mlr.tenant_id = #{tenantId}
+		<if test="dto.operateDateFrom != null">
+			AND mlr.creation_date >= #{dto.operateDateFrom}
+		</if>
+		<if test="dto.operateDateTo != null">
+			AND mlr.creation_date <![CDATA[<=]]> #{dto.operateDateTo}
+		</if>
+		<if test="dto.returnType != null and dto.returnType != ''">
+			AND mlr.ATTRIBUTE2 = #{dto.returnType}
+		</if>
+		<if test="dto.waferNumList != null and dto.waferNumList.size() > 0">
+			AND mlr.wafer_num IN
+			<foreach collection="dto.waferNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.cosType != null and dto.cosType != ''">
+			AND attr.ATTR_VALUE = #{dto.cosType}
+		</if>
+		<if test="dto.returnMaterialLotCodeList != null and dto.returnMaterialLotCodeList.size() > 0">
+			AND mml.MATERIAL_LOT_CODE IN
+			<foreach collection="dto.returnMaterialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.targetMaterialLotCodeList != null and dto.targetMaterialLotCodeList.size() > 0">
+			AND mmt.MATERIAL_LOT_CODE IN
+			<foreach collection="dto.targetMaterialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.supplierId != null and dto.supplierId != ''">
+			AND mml.SUPPLIER_ID = #{dto.supplierId}
+		</if>
+		<if test="dto.returnMaterialId != null and dto.returnMaterialId != ''">
+			AND cmm.MATERIAL_ID = #{dto.returnMaterialId}
+		</if>
+		<if test="dto.supplierLotList != null and dto.supplierLotList.size() > 0">
+			AND attr2.ATTR_NAME IN
+			<foreach collection="dto.supplierLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.lot != null and dto.lot != ''">
+			AND mml.lot = #{dto.lot}
+		</if>
+		<if test="dto.ncCodeId != null and dto.ncCodeId != ''">
+			AND mnc.NC_CODE_ID = #{dto.ncCodeId}
+		</if>
+		<if test="dto.createdById != null">
+			AND mlr.CREATED_BY = #{dto.createdById}
+		</if>
+		<if test="dto.workcellId != null and dto.workcellId != ''">
+			AND mlr.ATTRIBUTE1 = #{dto.workcellId}
+		</if>
+		AND wo.WORK_ORDER_ID = mlr.work_order_id
+		<if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+			AND wo.WORK_ORDER_NUM IN
+			<foreach collection="dto.workOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+        AND mpl.PROD_LINE_ID = wo.PRODUCTION_LINE_ID
+		<if test="dto.prodLineId != null and dto.prodLineId != ''">
+			AND mpl.PROD_LINE_ID = #{dto.prodLineId}
+		</if>
+        AND mm.MATERIAL_ID = wo.MATERIAL_ID
+		<if test="dto.materialId != null and dto.materialId != ''">
+			AND mm.MATERIAL_ID = #{dto.materialId}
+		</if>
+    </select>
+
+	<select id="queryCosReturnList" resultType="com.ruike.hme.domain.vo.HmeCosReturnVO2">
+		SELECT
+			mlr.target_material_lot_id,
+		  	mlr.return_qty
+		FROM
+			hme_material_lot_return mlr
+		WHERE mlr.tenant_id = #{tenantId}
+		AND mlr.target_material_lot_id IN
+		<foreach collection="targetMaterialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+	</select>
+</mapper>

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeWoPlanRateReportMapper">
+
+    <select id="selectAllShift" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO3">
+        SELECT
+            mmw.workcell_id,
+            mmw.workcell_code,
+            mmw.workcell_name,
+            mmor.sequence workcell_sequence,
+            mcs.shift_date,
+            mcs.shift_code,
+            wo.work_order_id,
+            wo.work_order_num,
+            wo.qty,
+            woa_re.attr_value,
+            wo.plan_end_time,
+            woa.actual_end_date,
+            mcs.CALENDAR_ID,
+            mcs.SEQUENCE
+        FROM
+            mt_mod_workcell mmw,
+            mt_mod_organization_rel mmor,
+            mt_calendar_shift mcs,
+            mt_calendar_org_rel mcor,
+            (
+            SELECT DISTINCT
+            sn1.shift_id,
+            sn1.work_order_id
+            FROM
+            hme_eo_job_sn sn1
+            WHERE
+            sn1.eo_id IS NOT NULL
+            AND sn1.rework_flag = 'N'
+            ) sn,
+            mt_wkc_shift mks,
+            mt_work_order wo
+        LEFT JOIN mt_work_order_attr woa_re ON woa_re.work_order_id = wo.work_order_id
+        AND woa_re.attr_name = 'attribute13'
+        LEFT JOIN mt_work_order_actual woa ON woa.work_order_id = wo.work_order_id
+        WHERE
+            mmor.top_site_id = #{dto.siteId} -- 前台传入的用户默认站点id
+        AND mmor.parent_organization_type = 'PROD_LINE'
+        AND mmor.parent_organization_id = #{dto.prodLineId} -- 前台选择的产线id
+        AND mmor.organization_type = 'WORKCELL'
+        AND mmor.organization_id = mmw.workcell_id
+        AND mcor.calendar_id = mcs.calendar_id
+        AND mcor.organization_type = 'workcell'
+        AND mcor.organization_id = mmw.WORKCELL_ID
+        AND mcs.shift_date >= #{dto.shiftDateFrom}
+        AND mcs.shift_date &lt;= #{dto.shiftDateTo}
+        AND mks.wkc_shift_id = sn.shift_id
+        AND wo.WORK_ORDER_ID = sn.work_order_id
+        AND wo.PRODUCTION_LINE_ID = mmor.parent_organization_id
+        AND mks.workcell_id = mmw.workcell_id
+        AND mks.shift_code = mcs.shift_code
+        AND mks.shift_date = mcs.shift_date
+        <if test="dto.publishDateFrom != null and dto.publishDateFrom != ''">
+            and woa_re.attr_value >=#{dto.publishDateFrom}
+        </if>
+        <if test="dto.publishDateTo != null and dto.publishDateTo != ''">
+            and  woa_re.attr_value &lt;=#{dto.publishDateTo}
+        </if>
+        <if test="dto.planEndTimeFrom != null and dto.planEndTimeFrom != ''">
+            and wo.plan_end_time >= #{dto.planEndTimeFrom}
+        </if>
+        <if test="dto.planEndTimeTo != null and dto.planEndTimeTo != ''">
+            and wo.plan_end_time &lt;= #{dto.planEndTimeTo}
+        </if>
+        <if test="dto.woEndTimeFrom != null and dto.woEndTimeFrom != ''">
+            and woa.actual_end_date >= #{dto.woEndTimeFrom}
+        </if>
+        <if test="dto.woEndTimeTo != null and dto.woEndTimeTo != ''">
+            and woa.actual_end_date &lt;= #{dto.woEndTimeTo}
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and  mmw.workcell_id = #{dto.workcellId}
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            and wo.work_order_num in
+            <foreach collection="dto.workOrderNumList" index="index" item="workOrderNum" open="(" separator="," close=")">
+                #{workOrderNum}
+            </foreach>
+        </if>
+        ORDER BY
+            mcs.shift_date,
+            mcs.sequence;
+    </select>
+
+    <select id="seletPlan" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO5">
+        SELECT
+            dr.work_order_id,
+            dr.workcell_id,
+            mcs.shift_date,
+            mcs.shift_code,
+            ifnull(sum(dr.dispatch_qty), 0) qty
+        FROM
+            hme_wo_dispatch_recode dr,
+            mt_calendar_shift mcs,
+            mt_calendar_org_rel mcor
+        WHERE
+            dr.calendar_shift_id = mcs.calendar_shift_id
+        AND mcor.calendar_id = mcs.calendar_id
+        AND mcor.organization_id = dr.workcell_id
+        AND mcor.organization_type = 'WORKCELL'
+        AND dr.tenant_id = #{tenantId}
+        AND mcs.shift_date >= #{shiftDateTo}
+        AND mcs.shift_date  &lt;= #{shiftDateTo}
+        GROUP BY
+            dr.work_order_id,
+            dr.workcell_id,
+            mcs.shift_date,
+            mcs.shift_code;
+    </select>
+
+    <select id="seletActualProduction" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO5">
+        SELECT
+            sn.work_order_id,
+            wks.shift_date,
+            wks.shift_code,
+            wks.workcell_id,
+            count(1) qty
+        FROM
+            mt_mod_organization_rel mor1,
+            mt_mod_organization_rel mor2,
+            hme_eo_job_sn sn,
+            mt_wkc_shift wks,
+            (
+                SELECT
+                    mor3.parent_organization_id workcell_id,
+                    min(mor3.sequence) sequence
+                FROM
+                    mt_mod_organization_rel mor3
+                WHERE
+                    mor3.top_site_id = #{siteId}
+                AND mor3.parent_organization_type = 'WORKCELL'
+                AND mor3.organization_type = 'WORKCELL'
+                GROUP BY
+                    mor3.parent_organization_id
+            ) rel_seq
+        WHERE
+            mor1.top_site_id = #{siteId}
+        AND mor1.parent_organization_type = 'WORKCELL'
+        AND mor1.parent_organization_id = mor2.organization_id
+        AND mor1.organization_type = 'WORKCELL'
+        AND mor2.top_site_id = #{siteId}
+        AND mor2.parent_organization_type = 'WORKCELL'
+        AND mor2.parent_organization_id = wks.workcell_id
+        AND mor2.organization_type = 'WORKCELL'
+        AND mor2.sequence = rel_seq.sequence
+        AND rel_seq.workcell_id = wks.workcell_id
+        AND sn.workcell_id = mor1.organization_id
+        AND sn.shift_id = wks.wkc_shift_id
+        AND sn.rework_flag = 'N'
+        AND sn.eo_id IS NOT NULL
+        AND wks.shift_date >= #{shiftDateTo}
+        AND wks.shift_date  &lt;= #{shiftDateTo}
+        AND wks.tenant_id = #{tenantId}
+        GROUP BY
+            wks.shift_date,
+            wks.shift_code,
+            wks.workcell_id,
+            sn.work_order_id
+    </select>
+
+    <select id="seletActualDelivery" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO5">
+        SELECT
+            eo.work_order_id,
+            mws.shift_date,
+            mws.shift_code,
+            mws.workcell_id,
+            ROUND( sum( eo.qty ), 0 ) QTY
+        FROM
+            mt_eo eo,
+            hme_eo_job_sn sn,
+            mt_mod_organization_rel mmor1,
+            mt_mod_organization_rel mmor2,
+            mt_wkc_shift mws,
+            mt_mod_workcell prs,
+            mt_mod_workcell_attr mmwa
+        WHERE
+            1 = 1
+            AND eo.eo_id = sn.eo_id
+            AND sn.eo_id IS NOT NULL
+            AND sn.site_out_date IS NOT NULL
+            AND sn.rework_flag = 'N'
+            AND sn.workcell_id = mmor2.organization_id
+            AND mmor2.top_site_id = #{siteId}
+            AND mmor2.parent_organization_type = 'WORKCELL'
+            AND mmor2.parent_organization_id = prs.workcell_id
+            AND mmor2.organization_type = 'WORKCELL'
+            AND mmor1.top_site_id = mmor2.top_site_id
+            AND mmor1.parent_organization_type = 'WORKCELL'
+            AND mmor1.parent_organization_id = mws.workcell_id
+            AND mmor1.organization_type = 'WORKCELL'
+            AND mmor1.organization_id = prs.workcell_id
+            AND prs.workcell_id = mmwa.workcell_id
+            AND mmwa.attr_name = 'OUTPUT_FLAG'
+            AND mmwa.attr_value = 'Y'
+            AND mmwa.tenant_id = prs.tenant_id
+            AND prs.tenant_id = sn.tenant_id
+            AND sn.tenant_id = #{tenantId}
+            AND sn.shift_id = mws.wkc_shift_id
+            AND mws.shift_date >= #{shiftDateTo}
+            AND mws.shift_date  &lt;= #{shiftDateTo}
+        group by
+            eo.work_order_id,
+            mws.shift_date,
+            mws.shift_code,
+            mws.workcell_id
+    </select>
+
+<!--    在制标准-->
+    <select id="seletStandard" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO5">
+         SELECT
+            wa.WORKCELL_ID,
+            ifnull(wa.ATTR_VALUE, 0) qty
+        FROM
+            mt_mod_workcell_attr wa
+        WHERE
+            wa.ATTR_NAME = 'PROCESS_STANDARD'
+    </select>
+
+     <!--    在制数量-->
+    <select id="seletQty" resultType="com.ruike.hme.domain.vo.HmeWoPlanRateReportVO5">
+       SELECT
+            mor2.PARENT_ORGANIZATION_ID workcell_id,
+            eo.WORK_ORDER_ID,
+            sum(
+                wip.WORKING_QTY + wip.QUEUE_QTY + wip.COMPLETED_QTY
+            ) qty
+        FROM
+            mt_eo eo,
+            mt_eo_router_actual ra,
+            mt_eo_step_actual sa,
+            mt_eo_step_wip wip,
+            mt_mod_organization_rel mor1,
+            mt_mod_organization_rel mor2
+        WHERE
+            eo.EO_ID = ra.EO_ID
+        AND ra.EO_ROUTER_ACTUAL_ID = sa.EO_ROUTER_ACTUAL_ID
+        AND sa.EO_STEP_ACTUAL_ID = wip.EO_STEP_ACTUAL_ID
+        AND mor1.ORGANIZATION_ID = wip.WORKCELL_ID
+        AND mor1.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.PARENT_ORGANIZATION_ID = mor2.ORGANIZATION_ID
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.TOP_SITE_ID = mor1.TOP_SITE_ID
+        AND mor1.TOP_SITE_ID = #{siteId}
+        AND eo.`STATUS` = 'WORKING'
+        GROUP BY
+            mor2.PARENT_ORGANIZATION_ID,
+            eo.WORK_ORDER_ID
+    </select>
+</mapper>

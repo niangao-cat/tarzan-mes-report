@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeAfterSalesRegisterMapper">
+
+
+    <select id="query" resultType="com.ruike.hme.domain.vo.HmeAfterSalesRegisterVO">
+        SELECT
+        hsr.service_receive_id,
+        hsr.sn_num,
+        mm.material_code,
+        mm.material_name,
+        hli.logistics_company,
+        hli.logistics_number,
+        hli.batch_number,
+        hsr.receive_status,
+        date_format( hli.creation_date, '%Y-%m-%d %H:%i:%s' ) AS creation_date,
+        date_format( hli.creation_date, '%Y-%m' ) AS creation_year_month,
+        hli.created_by,
+        iu.real_name signed_by,
+        date_format( hsr.receive_date, '%Y-%m-%d %H:%i:%s' ) AS receive_date,
+        hsr.receive_by,
+        nc_user.real_name unpack_by,
+        temp.WORKCELL_CODE,
+        temp.workcell_name,
+        hli.remark,
+        ea.actual_end_time,
+        to_days(ea.actual_end_time) - to_days(hli.creation_date) actual_data,
+        mml.MATERIAL_LOT_CODE current_sn_num,
+        mmsa.ATTR_VALUE as model,
+        mc.CUSTOMER_NAME,
+        hssr.back_type,
+        hssr.ATTRIBUTE2 receipt_date,
+        date_format(str_to_date(hssr.ATTRIBUTE2, '%Y-%m-%d %H:%i:%s'), '%Y-%m') as receipt_year_month,
+        hssr.internal_order_num
+        FROM
+        hme_service_receive hsr
+        LEFT JOIN hme_service_split_record hssr ON hssr.service_receive_id = hsr.service_receive_id
+        AND hssr.top_split_record_id = hssr.split_record_id
+        LEFT JOIN hme_after_sales_repair hasr ON hasr.service_receive_id = hssr.service_receive_id
+        LEFT JOIN mt_material_lot mml ON mml.MATERIAL_LOT_ID = hssr.material_lot_id
+        LEFT JOIN mt_customer mc ON mc.CUSTOMER_ID = hasr.customer_id
+        LEFT JOIN mt_eo eo ON eo.IDENTIFICATION = hsr.sn_num AND eo.STATUS = 'WORKING'
+        LEFT JOIN mt_eo_actual ea ON ea.EO_id = eo.EO_ID
+        join hme_logistics_info hli on hsr.logistics_info_id = hli.logistics_info_id AND hsr.tenant_id = hli.tenant_id
+        LEFT JOIN hzero_platform.iam_user nc_user ON nc_user.id = hsr.receive_by
+        LEFT JOIN hzero_platform.iam_user iu ON iu.id = hli.created_by
+        LEFT JOIN (
+        SELECT
+        mmw.WORKCELL_CODE,
+        mmw.workcell_name,
+        ea.ATTR_VALUE material_lot_code
+        FROM
+        mt_mod_workcell mmw,
+        mt_eo_step_wip sw,
+        mt_eo_step_actual sa,
+        mt_eo_router_actual ra,
+        mt_eo eo,
+        mt_eo_attr ea
+        WHERE
+        mmw.WORKCELL_ID = sw.WORKCELL_ID
+        AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+        AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+        AND ra.EO_ID = eo.EO_ID
+        AND eo.EO_ID = ea.EO_ID
+        AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+        ) temp on temp.material_lot_code = mml.material_lot_code,
+        mt_material mm,
+        mt_material_site mms
+        left join mt_material_site_attr mmsa on mmsa.material_site_id = mms.material_site_id
+        and mmsa.attr_name = 'attribute5'
+        where hsr.material_id = mm.material_id
+        and hsr.tenant_id = mm.tenant_id
+        and mm.material_id = mms.material_id
+        and hsr.site_id = mms.site_id
+        AND hsr.tenant_id = #{tenantId}
+        <if test="dto.snList != null and dto.snList.size() > 0">
+            AND hsr.sn_num IN
+            <foreach collection="dto.snList" index="index" item="sn" open="(" separator="," close=")">
+                #{sn}
+            </foreach>
+        </if>
+        <if test="dto.currentSnList != null and dto.currentSnList.size() > 0">
+            AND mml.MATERIAL_LOT_CODE IN
+            <foreach collection="dto.currentSnList" index="index" item="sn" open="(" separator="," close=")">
+                #{sn}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            AND mm.material_code IN
+            <foreach collection="dto.materialCodeList" index="index" item="materialCode" open="(" separator=","
+                     close=")">
+                #{materialCode}
+            </foreach>
+        </if>
+        <if test="dto.logisticsCompany != null and dto.logisticsCompany != ''">
+            and hli.logistics_company = #{dto.logisticsCompany}
+        </if>
+        <if test="dto.logisticsNumber != null and dto.logisticsNumber != ''">
+            and hli.logistics_number like CONCAT('%',#{dto.logisticsNumber},'%')
+        </if>
+        <if test="dto.batchNumber != null and dto.batchNumber != ''">
+            and hli.batch_number like CONCAT('%',#{dto.batchNumber},'%')
+        </if>
+        <if test="dto.currentWorkcellCode != null and dto.currentWorkcellCode != ''">
+            and temp.WORKCELL_CODE like CONCAT('%',#{dto.currentWorkcellCode},'%')
+        </if>
+        <if test="dto.receiveStatus != null and dto.receiveStatus != ''">
+            and hsr.receive_status = #{dto.receiveStatus}
+        </if>
+        <if test="dto.createdBy != null and dto.createdBy != ''">
+            and hli.created_by = #{dto.createdBy}
+        </if>
+        <if test="dto.receiveBy != null and dto.receiveBy != ''">
+            and hsr.receive_by = #{dto.receiveBy}
+        </if>
+        <if test="dto.creationDateFrom != null and dto.creationDateFrom != ''">
+            AND hli.creation_date >= #{dto.creationDateFrom}
+        </if>
+        <if test="dto.creationDateTo != null and dto.creationDateTo != ''">
+            AND hli.creation_date &lt;= #{dto.creationDateTo}
+        </if>
+        <if test="dto.receiveDateFrom != null and dto.receiveDateFrom != ''">
+            AND hsr.receive_date >= #{dto.receiveDateFrom}
+        </if>
+        <if test="dto.receiveDateTo != null and dto.receiveDateTo != ''">
+            AND hsr.receive_date &lt;= #{dto.receiveDateTo}
+        </if>
+        <if test="dto.actualEndTimeFrom != null and dto.actualEndTimeFrom != ''">
+            AND ea.actual_end_time >= #{dto.actualEndTimeFrom}
+        </if>
+        <if test="dto.actualEndTimeTo != null and dto.actualEndTimeTo != ''">
+            AND ea.actual_end_time &lt;= #{dto.actualEndTimeTo}
+        </if>
+    </select>
+</mapper>

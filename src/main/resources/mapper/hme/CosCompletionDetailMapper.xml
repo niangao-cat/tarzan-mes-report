@@ -1,0 +1,651 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.CosCompletionDetailMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.representation.CosCompletionDetailRepresentation">
+		SELECT
+		mmlo2.LOCATOR_CODE PARENT_LOCATOR_CODE,
+		mmlo.LOCATOR_CODE,
+		mwo.work_order_num,
+		mm.MATERIAL_CODE,
+		mm.MATERIAL_NAME,
+		hmll.ATTRIBUTE1 AS cos_type,
+		mml.MATERIAL_LOT_CODE,
+		mml.MATERIAL_LOT_ID,
+		hmll.load_row,
+		hmll.load_column,
+		hmll.load_sequence,
+		hmll.ATTRIBUTE2 wafer,
+		ifNUll(hsd.attribute1, 'UNSELECTED') selection_status,
+		hmll.hot_sink_code,
+		mml2.material_lot_code selected_material_lot_code,
+		hsd.old_load,
+		hsd.virtual_num,
+		hsd.ATTRIBUTE2,
+		me.identification,
+		mm2.material_code device_material_code,
+		mm2.MATERIAL_NAME device_material_name,
+		hps.pre_selection_lot,
+		hps.ATTRIBUTE1 selection_rule_code,
+		IFNULL(fwo2.WORK_ORDER_NUM, fwo.WORK_ORDER_NUM) release_work_order_num,
+		IF(ISNULL(fwo2.WORK_ORDER_NUM) and ISNULL(fwo.WORK_ORDER_NUM),'N','Y') BIND_FLAG,
+		hmll.attribute4 hot_sink_material_lot_code,
+		hmll.attribute6 hot_sink_supplier_lot,
+		hmll.attribute13 hot_sink_au_sn_rate,
+		hmll.ATTRIBUTE7 gold_material_lot_code,
+		hmll.ATTRIBUTE9 gold_supplier_lot,
+		pre_iu.real_name pre_selection_operator_name,
+		hsd.creation_date pre_selection_date,
+		pre_last_iu.real_name load_operator_name,
+		hsd.last_update_date load_date,
+		case WHEN IFNULL(hmll.ATTRIBUTE14,'') != 'Y' THEN 'N' ELSE 'Y' END freeze_Flag
+		FROM
+		hme_material_lot_load hmll
+		LEFT JOIN hme_selection_details hsd ON hmll.load_sequence = hsd.load_sequence
+		AND hsd.TENANT_ID = hmll.TENANT_ID
+		LEFT JOIN hme_pre_selection hps ON hsd.pre_selection_id = hps.pre_selection_id
+		LEFT JOIN hme_virtual_num hvn ON hsd.virtual_num = hvn.virtual_num
+		LEFT JOIN mt_material_lot mml2 ON hsd.old_material_lot_id = mml2.material_lot_id
+		LEFT JOIN mt_eo me ON me.eo_id = hvn.eo_id
+		LEFT JOIN mt_work_order fwo ON fwo.WORK_ORDER_ID = me.WORK_ORDER_ID
+		LEFT JOIN mt_work_order fwo2 ON fwo2.WORK_ORDER_ID = hvn.WORK_ORDER_ID
+		LEFT JOIN mt_material mm2 ON mm2.material_id = hps.attribute3
+		LEFT JOIN hzero_platform.iam_user pre_iu ON pre_iu.id = hsd.created_by
+		LEFT JOIN hzero_platform.iam_user pre_last_iu ON pre_last_iu.id = hsd.LAST_UPDATED_BY,
+		mt_work_order mwo,
+		mt_material_lot mml
+		LEFT JOIN mt_material_lot_attr mfAttr ON mfAttr.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID AND mfAttr.	ATTR_NAME = 'MF_FLAG',
+		mt_mod_locator mmlo,
+		mt_mod_locator mmlo2,
+		mt_material mm
+		WHERE
+		hmll.tenant_id = #{dto.tenantId}
+		AND hmll.attribute3 = mwo.work_order_id
+		AND (hmll.material_lot_id is NOT NULL OR hmll.material_lot_id != '')
+		AND mml.material_lot_id = hmll.material_lot_id
+		AND mml.tenant_id = #{dto.tenantId}
+		AND (mfAttr.ATTR_VALUE is NULL OR mfAttr.ATTR_VALUE = '' OR mfAttr.ATTR_VALUE = 'N')
+		AND mml.locator_id = mmlo.locator_id
+		AND mmlo.parent_locator_id = mmlo2.locator_id
+		AND mm.material_id = mml.material_id
+		<if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+			AND hmll.material_lot_id IN
+			<foreach collection="dto.materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+			AND mml.material_lot_code IN
+			<foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.labCodeList != null and dto.labCodeList.size() > 0">
+			AND EXISTS(
+			SELECT
+			1
+			FROM
+			hme_material_lot_lab_code
+			WHERE
+			tenant_id = #{dto.tenantId}
+			AND material_lot_id = mml.material_lot_id
+			AND lab_code IN
+			<foreach collection="dto.labCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+			)
+		</if>
+		<if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+			AND mmlo2.locator_id IN
+			<foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.locatorIdList != null and dto.locatorIdList.size() > 0">
+			AND mmlo.locator_id IN
+			<foreach collection="dto.locatorIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+			AND mm.material_id IN
+			<foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionDateFrom != null and dto.preSelectionDateFrom != ''">
+			AND hsd.creation_date >= #{dto.preSelectionDateFrom}
+		</if>
+		<if test="dto.preSelectionDateTo != null and dto.preSelectionDateTo != ''">
+			AND hsd.creation_date <![CDATA[<=]]> #{dto.preSelectionDateTo}
+		</if>
+		<if test="dto.selectionStatus != null and dto.selectionStatus != ''">
+
+			<choose>
+				<when test='dto.selectionStatus == "UNSELECTED"'>
+					AND (hsd.attribute1 is null OR hsd.attribute1 = '')
+				</when>
+				<otherwise>
+					AND hsd.attribute1 = #{dto.selectionStatus}
+				</otherwise>
+			</choose>
+
+		</if>
+		<if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+			AND mwo.work_order_num IN
+			<foreach collection="dto.workOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.waferList != null and dto.waferList.size() > 0">
+			AND hmll.ATTRIBUTE2 IN
+			<foreach collection="dto.waferList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+			AND hmll.ATTRIBUTE1 IN
+			<foreach collection="dto.cosTypeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.hotSinkCodeList != null and dto.hotSinkCodeList.size() > 0">
+			AND hmll.hot_sink_code IN
+			<foreach collection="dto.hotSinkCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.selectionSourceMaterialLotCodeList != null and dto.selectionSourceMaterialLotCodeList.size() > 0">
+			AND mml2.material_lot_code IN
+			<foreach collection="dto.selectionSourceMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.virtualNumList != null and dto.virtualNumList.size() > 0">
+			AND hsd.virtual_num IN
+			<foreach collection="dto.virtualNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.identificationList != null and dto.identificationList.size() > 0">
+			AND me.identification IN
+			<foreach collection="dto.identificationList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.deviceMaterialIdList != null and dto.deviceMaterialIdList.size() > 0">
+			AND mm2.material_id IN
+			<foreach collection="dto.deviceMaterialIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionLotList != null and dto.preSelectionLotList.size() > 0">
+			AND hps.pre_selection_lot IN
+			<foreach collection="dto.preSelectionLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.selectionRuleCodeList != null and dto.selectionRuleCodeList.size() > 0">
+			AND hps.ATTRIBUTE1 IN
+			<foreach collection="dto.selectionRuleCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.releaseWorkOrderNum != null and dto.releaseWorkOrderNum != ''">
+			AND fwo.WORK_ORDER_NUM = #{dto.releaseWorkOrderNum}
+		</if>
+		<if test="dto.hotSinkMaterialLotCodeList != null and dto.hotSinkMaterialLotCodeList.size() > 0">
+			AND hmll.attribute4 IN
+			<foreach collection="dto.hotSinkMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.hotSinkSupplierLotList != null and dto.hotSinkSupplierLotList.size() > 0">
+			AND hmll.attribute6 IN
+			<foreach collection="dto.hotSinkSupplierLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.goldMaterialLotCodeList != null and dto.goldMaterialLotCodeList.size() > 0">
+			AND hmll.ATTRIBUTE7 IN
+			<foreach collection="dto.goldMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.goldSupplierLotList != null and dto.goldSupplierLotList.size() > 0">
+			AND hmll.ATTRIBUTE9 IN
+			<foreach collection="dto.goldSupplierLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionOperatorId != null and dto.preSelectionOperatorId != ''">
+			AND hsd.created_by = #{dto.preSelectionOperatorId}
+		</if>
+		<if test="dto.loadOperatorId != null and dto.loadOperatorId != ''">
+			AND hsd.LAST_UPDATED_BY = #{dto.loadOperatorId}
+		</if>
+		<if test="dto.loadDateFrom != null and dto.loadDateFrom != null">
+			AND hsd.last_update_date >= #{dto.loadDateFrom}
+		</if>
+		<if test="dto.loadDateTo != null and dto.loadDateTo != null">
+			AND hsd.last_update_date <![CDATA[<=]]> #{dto.loadDateTo}
+		</if>
+		<if test="dto.freezeFlag != null and dto.freezeFlag != ''">
+			<choose>
+				<when test='dto.freezeFlag == "Y"'>
+					AND hmll.ATTRIBUTE14 = #{dto.freezeFlag}
+				</when>
+				<when test='dto.freezeFlag == "N"'>
+					AND (hmll.ATTRIBUTE14 is NULL OR hmll.ATTRIBUTE14 = '')
+				</when>
+			</choose>
+		</if>
+		<if test="dto.bindFlag != null and dto.bindFlag != ''">
+			<choose>
+				<when test='dto.bindFlag == "Y"'>
+					AND (fwo2.WORK_ORDER_NUM IS NOT NULL OR fwo.WORK_ORDER_NUM IS NOT NULL)
+				</when>
+				<when test='dto.bindFlag == "N"'>
+					AND ((fwo2.WORK_ORDER_NUM is NULL OR fwo2.WORK_ORDER_NUM = '') OR (fwo.WORK_ORDER_NUM is NULL OR fwo.WORK_ORDER_NUM = ''))
+				</when>
+			</choose>
+		</if>
+    </select>
+
+	<select id="selectList2" resultType="com.ruike.hme.api.dto.representation.CosCompletionDetailRepresentation">
+		SELECT
+		mmlo2.LOCATOR_CODE PARENT_LOCATOR_CODE,
+		mmlo.LOCATOR_CODE,
+		mwo.work_order_num,
+		mm.MATERIAL_CODE,
+		mm.MATERIAL_NAME,
+		hmll.ATTRIBUTE1 AS cos_type,
+		mml.MATERIAL_LOT_CODE,
+		mml.MATERIAL_LOT_ID,
+		hmll.load_row,
+		hmll.load_column,
+		hmll.load_sequence,
+		hmll.ATTRIBUTE2 wafer,
+		ifNUll(hsd.attribute1, 'UNSELECTED') selection_status,
+		hmll.hot_sink_code,
+		mml2.material_lot_code selected_material_lot_code,
+		hsd.old_load,
+		hsd.virtual_num,
+		hsd.ATTRIBUTE2,
+		me.identification,
+		mm2.material_code device_material_code,
+		mm2.MATERIAL_NAME device_material_name,
+		hps.pre_selection_lot,
+		hps.ATTRIBUTE1 selection_rule_code,
+		IFNULL(fwo2.WORK_ORDER_NUM, fwo.WORK_ORDER_NUM) release_work_order_num,
+		IF(ISNULL(fwo2.WORK_ORDER_NUM) and ISNULL(fwo.WORK_ORDER_NUM),'N','Y') BIND_FLAG,
+		hmll.attribute4 hot_sink_material_lot_code,
+		hmll.attribute6 hot_sink_supplier_lot,
+		hmll.attribute13 hot_sink_au_sn_rate,
+		hmll.ATTRIBUTE7 gold_material_lot_code,
+		hmll.ATTRIBUTE9 gold_supplier_lot,
+		pre_iu.real_name pre_selection_operator_name,
+		hsd.creation_date pre_selection_date,
+		pre_last_iu.real_name load_operator_name,
+		hsd.last_update_date load_date,
+		case WHEN IFNULL(hmll.ATTRIBUTE14,'') != 'Y' THEN 'N' ELSE 'Y' END freeze_Flag
+		FROM
+		hme_material_lot_load hmll
+		LEFT JOIN hme_selection_details hsd ON hmll.load_sequence = hsd.load_sequence
+		AND hsd.TENANT_ID = hmll.TENANT_ID
+		LEFT JOIN hme_pre_selection hps ON hsd.pre_selection_id = hps.pre_selection_id
+		LEFT JOIN hme_virtual_num hvn ON hsd.virtual_num = hvn.virtual_num
+		LEFT JOIN mt_material_lot mml2 ON hsd.old_material_lot_id = mml2.material_lot_id
+		LEFT JOIN mt_eo me ON me.eo_id = hvn.eo_id
+		LEFT JOIN mt_work_order fwo ON fwo.WORK_ORDER_ID = me.WORK_ORDER_ID
+		LEFT JOIN mt_work_order fwo2 ON fwo2.WORK_ORDER_ID = hvn.WORK_ORDER_ID
+		LEFT JOIN mt_material mm2 ON mm2.material_id = hps.attribute3
+		LEFT JOIN hzero_platform.iam_user pre_iu ON pre_iu.id = hsd.created_by
+		LEFT JOIN hzero_platform.iam_user pre_last_iu ON pre_last_iu.id = hsd.LAST_UPDATED_BY,
+		mt_work_order mwo,
+		mt_material_lot mml
+		LEFT JOIN mt_material_lot_attr mfAttr ON mfAttr.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID AND mfAttr.	ATTR_NAME = 'MF_FLAG',
+		mt_mod_locator mmlo,
+		mt_mod_locator mmlo2,
+		mt_material mm
+		WHERE
+		hmll.tenant_id = #{dto.tenantId}
+		AND hmll.attribute3 = mwo.work_order_id
+		AND (hmll.material_lot_id is NULL OR hmll.material_lot_id = '')
+		AND mml.material_lot_id = hsd.new_material_lot_id
+		AND mml.tenant_id = #{dto.tenantId}
+		AND (mfAttr.ATTR_VALUE is NULL OR mfAttr.ATTR_VALUE = '' OR mfAttr.ATTR_VALUE = 'N')
+		AND mml.locator_id = mmlo.locator_id
+		AND mmlo.parent_locator_id = mmlo2.locator_id
+		AND mm.material_id = mml.material_id
+		<if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+			AND hsd.new_material_lot_id IN
+			<foreach collection="dto.materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+			AND mml.material_lot_code IN
+			<foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.labCodeList != null and dto.labCodeList.size() > 0">
+			AND EXISTS(
+			SELECT
+			1
+			FROM
+			hme_material_lot_lab_code
+			WHERE
+			tenant_id = #{dto.tenantId}
+			AND material_lot_id = mml.material_lot_id
+			AND lab_code IN
+			<foreach collection="dto.labCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+			)
+		</if>
+		<if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+			AND mmlo2.locator_id IN
+			<foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.locatorIdList != null and dto.locatorIdList.size() > 0">
+			AND mmlo.locator_id IN
+			<foreach collection="dto.locatorIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+			AND mm.material_id IN
+			<foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionDateFrom != null and dto.preSelectionDateFrom != ''">
+			AND hsd.creation_date >= #{dto.preSelectionDateFrom}
+		</if>
+		<if test="dto.preSelectionDateTo != null and dto.preSelectionDateTo != ''">
+			AND hsd.creation_date <![CDATA[<=]]> #{dto.preSelectionDateTo}
+		</if>
+		<if test="dto.selectionStatus != null and dto.selectionStatus != ''">
+			<choose>
+				<when test='dto.selectionStatus == "UNSELECTED"'>
+					AND (hsd.attribute1 is null OR hsd.attribute1 = '')
+				</when>
+				<otherwise>
+					AND hsd.attribute1 = #{dto.selectionStatus}
+				</otherwise>
+			</choose>
+		</if>
+		<if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+			AND mwo.work_order_num IN
+			<foreach collection="dto.workOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.waferList != null and dto.waferList.size() > 0">
+			AND hmll.ATTRIBUTE2 IN
+			<foreach collection="dto.waferList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+			AND hmll.ATTRIBUTE1 IN
+			<foreach collection="dto.cosTypeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.hotSinkCodeList != null and dto.hotSinkCodeList.size() > 0">
+			AND hmll.hot_sink_code IN
+			<foreach collection="dto.hotSinkCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.selectionSourceMaterialLotCodeList != null and dto.selectionSourceMaterialLotCodeList.size() > 0">
+			AND mml2.material_lot_code IN
+			<foreach collection="dto.selectionSourceMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.virtualNumList != null and dto.virtualNumList.size() > 0">
+			AND hsd.virtual_num IN
+			<foreach collection="dto.virtualNumList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.identificationList != null and dto.identificationList.size() > 0">
+			AND me.identification IN
+			<foreach collection="dto.identificationList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.deviceMaterialIdList != null and dto.deviceMaterialIdList.size() > 0">
+			AND mm2.material_id IN
+			<foreach collection="dto.deviceMaterialIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionLotList != null and dto.preSelectionLotList.size() > 0">
+			AND hps.pre_selection_lot IN
+			<foreach collection="dto.preSelectionLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.selectionRuleCodeList != null and dto.selectionRuleCodeList.size() > 0">
+			AND hps.ATTRIBUTE1 IN
+			<foreach collection="dto.selectionRuleCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.releaseWorkOrderNum != null and dto.releaseWorkOrderNum != ''">
+			AND fwo.WORK_ORDER_NUM = #{dto.releaseWorkOrderNum}
+		</if>
+		<if test="dto.hotSinkMaterialLotCodeList != null and dto.hotSinkMaterialLotCodeList.size() > 0">
+			AND hmll.attribute4 IN
+			<foreach collection="dto.hotSinkMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.hotSinkSupplierLotList != null and dto.hotSinkSupplierLotList.size() > 0">
+			AND hmll.attribute6 IN
+			<foreach collection="dto.hotSinkSupplierLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.goldMaterialLotCodeList != null and dto.goldMaterialLotCodeList.size() > 0">
+			AND hmll.ATTRIBUTE7 IN
+			<foreach collection="dto.goldMaterialLotCodeList" item="item" index="index" open="(" close=")"
+					 separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.goldSupplierLotList != null and dto.goldSupplierLotList.size() > 0">
+			AND hmll.ATTRIBUTE9 IN
+			<foreach collection="dto.goldSupplierLotList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.preSelectionOperatorId != null and dto.preSelectionOperatorId != ''">
+			AND hsd.created_by = #{dto.preSelectionOperatorId}
+		</if>
+		<if test="dto.loadOperatorId != null and dto.loadOperatorId != ''">
+			AND hsd.LAST_UPDATED_BY = #{dto.loadOperatorId}
+		</if>
+		<if test="dto.loadDateFrom != null and dto.loadDateFrom != null">
+			AND hsd.last_update_date >= #{dto.loadDateFrom}
+		</if>
+		<if test="dto.loadDateTo != null and dto.loadDateTo != null">
+			AND hsd.last_update_date <![CDATA[<=]]> #{dto.loadDateTo}
+		</if>
+		<if test="dto.freezeFlag != null and dto.freezeFlag != ''">
+			<choose>
+				<when test='dto.freezeFlag == "Y"'>
+					AND hmll.ATTRIBUTE14 = #{dto.freezeFlag}
+				</when>
+				<when test='dto.freezeFlag == "N"'>
+					AND (hmll.ATTRIBUTE14 is NULL OR hmll.ATTRIBUTE14 = '')
+				</when>
+			</choose>
+		</if>
+		<if test="dto.bindFlag != null and dto.bindFlag != ''">
+			<choose>
+				<when test='dto.bindFlag == "Y"'>
+					AND (fwo2.WORK_ORDER_NUM IS NOT NULL OR fwo.WORK_ORDER_NUM IS NOT NULL)
+				</when>
+				<when test='dto.bindFlag == "N"'>
+					AND ((fwo2.WORK_ORDER_NUM is NULL OR fwo2.WORK_ORDER_NUM = '') OR (fwo.WORK_ORDER_NUM is NULL OR fwo.WORK_ORDER_NUM = ''))
+				</when>
+			</choose>
+		</if>
+	</select>
+
+	<select id="queryLabCodeByMaterialLotIds" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO">
+		SELECT
+			material_lot_id,
+		    GROUP_CONCAT(DISTINCT lab_code Separator '/') lab_code
+		FROM
+			hme_material_lot_lab_code
+		WHERE
+		tenant_id = #{tenantId}
+		AND material_lot_id IN
+		<foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		GROUP BY material_lot_id
+	</select>
+
+	<select id="queryCurrentByRuleCode" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO2">
+		SELECT
+			crh.cos_rule_code,
+			crl.Collection_item,
+			crl.current
+		FROM
+			hme_cos_rule_head crh,
+			hme_cos_rule_logic crl
+		WHERE
+			crh.TENANT_ID = #{tenantId}
+		AND crh.cos_rule_code IN
+		<foreach collection="selectionRuleCodeList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		AND crh.cos_rule_id = crl.cos_rule_id
+		GROUP BY
+		crh.cos_rule_code,
+		crl.Collection_item,
+		crl.current
+	</select>
+
+	<select id="queryCosFunctionByCurrentAndLoadSequence" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO">
+		SELECT
+		   hcf.A02,
+		   hcf.A04,
+		   hcf.A06,
+		   hcf.load_sequence,
+		   hcf.current
+		FROM
+			hme_cos_function hcf
+		WHERE hcf.TENANT_ID = #{tenantId}
+		AND hcf.load_sequence IN
+		<foreach collection="loadSequenceList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		AND hcf.current IN
+		<foreach collection="currentList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		AND hcf.site_id = #{siteId}
+		GROUP BY
+		  hcf.A02,
+		  hcf.A04,
+		  hcf.A06,
+		  hcf.load_sequence,
+		  hcf.current
+	</select>
+
+	<select id="queryMaterialLot" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO">
+		SELECT
+		mml.material_lot_id
+		FROM
+		mt_material_lot mml
+		WHERE
+		mml.TENANT_ID = #{dto.tenantId}
+		<if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+			AND mml.MATERIAL_LOT_CODE IN
+			<foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.freezeFlag != null and dto.freezeFlag != ''">
+			<choose>
+				<when test='dto.freezeFlag == "Y"'>
+					AND mml.FREEZE_FLAG = #{dto.freezeFlag}
+				</when>
+				<when test='dto.freezeFlag == "N"'>
+					AND (mml.FREEZE_FLAG is null OR mml.FREEZE_FLAG = '' OR mml.FREEZE_FLAG = #{dto.freezeFlag})
+				</when>
+			</choose>
+		</if>
+		<if test="dto.allLocatorIdList != null and dto.allLocatorIdList.size() > 0">
+			AND mml.LOCATOR_ID IN
+			<foreach collection="dto.allLocatorIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+	</select>
+
+	<select id="queryMaterialLotOfLabCode" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO">
+		SELECT
+		hmllc.material_lot_id
+		FROM
+		hme_material_lot_lab_code hmllc
+		WHERE
+		hmllc.tenant_id = #{dto.tenantId}
+		AND hmllc.lab_code IN
+		<foreach collection="dto.labCodeList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+	</select>
+
+	<select id="queryEo" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO3">
+		SELECT
+		eo.EO_ID
+		FROM
+		mt_eo eo
+		WHERE
+		eo.TENANT_ID = #{dto.tenantId}
+		AND eo.IDENTIFICATION IN
+		<foreach collection="dto.identificationList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+	</select>
+
+	<select id="queryLocator" resultType="com.ruike.hme.domain.vo.HmeCosCompletionVO3">
+		SELECT
+		mml_l.LOCATOR_ID
+		FROM
+		mt_mod_locator mml_l
+		WHERE
+		mml_l.TENANT_ID = #{dto.tenantId}
+		<if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+			AND mml_l.PARENT_LOCATOR_ID IN
+			<foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+
+		<if test="dto.locatorIdList != null and dto.warehouseIdList.size() > 0">
+			AND mml_l.LOCATOR_ID IN
+			<foreach collection="dto.locatorIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+	</select>
+
+</mapper>

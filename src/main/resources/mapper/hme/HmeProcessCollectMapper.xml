@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeProcessCollectMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.domain.vo.HmeProcessCollectVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT
+        me.eo_id,
+        me.identification,
+        mm.material_code,
+        mm.material_name,
+        wo.work_order_num,
+        ejs.job_id,
+        ejs.site_out_date,
+        ejs.site_in_by,
+        usr.real_name worker,
+        ejs.site_out_date work_time,
+        ejs.workcell_id,
+        mor1.PARENT_ORGANIZATION_ID process_id,
+        wc.WORKCELL_NAME as workcell_name,
+        pc.WORKCELL_NAME process_workcell_name,
+        wo_mm.material_code wo_material_code,
+        wo_mm.material_name wo_material_name,
+        mml.MATERIAL_LOT_ID,
+        mml.quality_status,
+        me.status eo_status,
+        mgsl.description eo_status_meaning,
+        case when mml.freeze_flag is null or mml.freeze_flag = '' then 'N' else mml.freeze_flag end as freeze_flag,
+        mks.shift_date,
+        mks.shift_code,
+        case when me.MATERIAL_ID != wo.MATERIAL_ID then 'Y' else 'N' end transform_flag
+        FROM
+        mt_eo me
+        LEFT JOIN mt_material mm ON mm.material_id = me.material_id
+        LEFT JOIN mt_work_order wo ON wo.work_order_id = me.work_order_id
+        LEFT JOIN mt_material wo_mm ON wo_mm.material_id = wo.material_id
+        LEFT JOIN hme_eo_job_sn ejs ON ejs.eo_id = me.EO_ID
+        left join mt_mod_organization_rel mor1 on wo.site_id =
+        mor1.top_site_id AND mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL' AND mor1.ORGANIZATION_TYPE = 'WORKCELL' AND mor1.ORGANIZATION_ID = ejs.workcell_id
+        LEFT JOIN mt_mod_workcell wc ON wc.WORKCELL_ID = ejs.workcell_id AND wc.WORKCELL_TYPE = 'STATION'
+        LEFT JOIN mt_mod_workcell pc ON pc.WORKCELL_ID = mor1.PARENT_ORGANIZATION_ID AND pc.WORKCELL_TYPE = 'PROCESS'
+        left join mt_material_lot mml on mml.MATERIAL_LOT_CODE = me.IDENTIFICATION
+        left join mt_wkc_shift mks on mks.WKC_SHIFT_ID = ejs.shift_id
+        join mt_gen_status mgs on mgs.STATUS_GROUP = 'EO_STATUS' and mgs.status_code = me.status
+        left join mt_gen_status_tl mgsl on mgs.GEN_STATUS_ID = mgsl.GEN_STATUS_ID and mgsl.lang = #{lang}
+        left join iam_user usr on ejs.site_in_by = usr.id
+        WHERE me.tenant_id = wo.tenant_id
+        and me.tenant_id = mm.tenant_id
+        and me.tenant_id = pc.tenant_id
+        and me.tenant_id = wc.tenant_id
+        and me.tenant_id = #{tenantId}
+        and ejs.workcell_id in (
+        <foreach collection="dto.workcellIdList" item="i" separator="," index="index">
+            #{i}
+        </foreach>
+        )
+        and ejs.job_type != 'SSN_PROCESS'
+        <if test="dto.startTime != null">
+            AND ejs.site_in_date &gt;= #{dto.startTime}
+        </if>
+        <if test="dto.endTime != null">
+            AND ejs.site_in_date &lt;= #{dto.endTime}
+        </if>
+        <if test="dto.workOrderNumList!=null and dto.workOrderNumList.size() > 0">
+            AND wo.work_order_num IN (
+            <foreach collection="dto.workOrderNumList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.materialCodeList!=null and dto.materialCodeList.size() > 0">
+            AND mm.material_code IN (
+            <foreach collection="dto.materialCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.snList!=null and dto.snList.size() > 0">
+            AND me.IDENTIFICATION IN (
+            <foreach collection="dto.snList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.processCodeList!=null and dto.processCodeList.size() > 0">
+            AND pc.workcell_id IN (
+            <foreach collection="dto.processCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.workcellCodeList!=null and dto.workcellCodeList.size() > 0">
+            AND wc.workcell_id IN (
+            <foreach collection="dto.workcellCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.eoStatusList!=null and dto.eoStatusList.size() > 0">
+            AND me.status IN (
+            <foreach collection="dto.eoStatusList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            AND wo.site_id = #{dto.siteId}
+        </if>
+        <if test="dto.qualityStatus != null and dto.qualityStatus != ''">
+            AND mml.quality_status = #{dto.qualityStatus}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'Y'.toString()">
+            and mml.freeze_flag = #{dto.freezeFlag}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'N'.toString()">
+            and mml.freeze_flag != 'Y'
+        </if>
+        <if test="dto.transformFlag != null and dto.transformFlag != ''">
+            <choose>
+                <when test='dto.transformFlag == "Y"'>
+                    and me.MATERIAL_ID != wo.MATERIAL_ID
+                </when>
+                <when test='dto.transformFlag == "N"'>
+                    and me.MATERIAL_ID = wo.MATERIAL_ID
+                </when>
+            </choose>
+        </if>
+        <if test="dto.userId != null">
+            AND ejs.site_in_by = #{dto.userId}
+        </if>
+        <if test="dto.shiftDate != null">
+            AND mks.shift_date = #{dto.shiftDate}
+        </if>
+        <if test="dto.shiftCode != null and dto.shiftCode != ''">
+            <bind name="shiftCodeLike" value="'%'+dto.shiftCode+'%'"/>
+            AND mks.shift_code like #{shiftCodeLike}
+        </if>
+        <if test="dto.productMatch != null">
+            AND substr(me.IDENTIFICATION,3,4) like #{dto.productMatch}
+        </if>
+        <if test="dto.labCode !=null ">
+            <bind name="labCodeLike" value="'%'+dto.labCode+'%'"/>
+            and exists (select 1
+            from hme_material_lot_lab_code mllc
+            where mllc.material_lot_id = mml.material_lot_id
+            and mllc.lab_code like #{labCodeLike})
+        </if>
+
+    </select>
+
+    <select id="selectCollectProBatchList" resultType="com.ruike.hme.domain.vo.HmeProcessCollectProVO">
+        select
+        dr.job_id ,
+        mt.tag_description pro_name,
+        mt.tag_code ,
+        ifnull(dr.result,'') pro_result
+        from hme_eo_job_data_record dr
+        left join mt_tag mt on mt.tag_id = dr.tag_id
+        where dr.tenant_id = #{tenantId}
+        and dr.job_id IN
+        <foreach collection="jobIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and (tag_code is not null and tag_code != '')
+        and (mt.tag_description is not null and mt.tag_description != '')
+        order by mt.creation_date
+    </select>
+
+    <select id="selectProcessJobDetailList" resultType="com.ruike.hme.domain.vo.HmeProcessJobDetailVO">
+        select mml.material_lot_id,
+               mml.material_id,
+               mm.material_code,
+               mml.material_lot_code,
+               mml.lot,
+               la.attr_value suppLIER_LOT,
+               jm.release_qty
+        from hme_eo_job_material jm,
+             mt_material_lot mml
+                 left join mt_material_lot_attr la on la.material_lot_id = mml.material_lot_id
+                 and la.attr_name = 'SUPPLIER_LOT',
+             mt_material mm
+        where jm.material_lot_id = mml.material_lot_id
+          and jm.material_lot_code != ''
+          and jm.material_lot_code is not NULL
+          and mml.material_id = mm.material_id
+          and jm.tenant_id = #{tenantId}
+          and jm.job_id = #{jobId}
+          and ((jm.is_issued = '1' and jm.release_qty >0) or ( jm.release_qty <![CDATA[<]]> 0))
+        union
+        select mml.material_lot_id,
+               mml.material_id,
+               mm.material_code,
+               mml.material_lot_code,
+               mml.lot,
+               la.attr_value supplier_lot,
+               slm.release_qty
+        from hme_eo_job_sn_lot_material slm,
+             mt_material_lot mml
+                 left join mt_material_lot_attr la on la.material_lot_id = mml.material_lot_id
+                 and la.attr_name = 'SUPPLIER_LOT',
+             mt_material mm
+        where slm.material_lot_id = mml.material_lot_id
+          and mml.material_id = mm.material_id
+          and slm.tenant_id = #{tenantId}
+          and slm.job_id = #{jobId}
+    </select>
+
+    <select id="selectEoNcBatchList" resultType="com.ruike.hme.domain.vo.EoNcRecordVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT nc_p.eo_id
+        ,nc_p.creation_date nc_date
+        ,GROUP_CONCAT(mnct.DESCRIPTION SEPARATOR';') latest_nc_tag
+        from
+        mt_nc_record nc_p,
+        mt_nc_record nc_s,
+        mt_nc_code mnc,
+        mt_nc_code_tl mnct
+        where nc_p.PARENT_NC_RECORD_ID = ''
+        and nc_s.PARENT_NC_RECORD_ID = nc_p.NC_RECORD_ID
+        and mnc.nc_code_id = nc_s.NC_CODE_ID
+        and mnct.NC_CODE_ID = mnc.NC_CODE_ID
+        and nc_p.TENANT_ID = #{tenantId}
+        and mnct.LANG = #{lang}
+        and nc_p.eo_id in
+        <foreach collection="eoIdList" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+        group by nc_p.eo_id
+        ,nc_p.creation_date
+        order by nc_p.eo_id
+        ,nc_p.creation_date desc
+    </select>
+
+    <select id="selectWorkcellIdList" resultType="java.lang.String">
+        SELECT
+        mor1.ORGANIZATION_ID
+        FROM
+        mt_mod_workcell pc,
+        mt_mod_organization_rel mor1
+        WHERE
+        mor1.TOP_SITE_ID = #{dto.siteId}
+        AND mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.PARENT_ORGANIZATION_ID = pc.WORKCELL_ID
+        AND pc.WORKCELL_ID IN (
+        <foreach collection="dto.processCodeList" item="i" separator="," index="index">
+            #{i}
+        </foreach>
+        )
+        AND pc.WORKCELL_TYPE = 'PROCESS'
+    </select>
+
+    <select id="gpSelectTableName" resultType="com.ruike.hme.domain.vo.HmeProcessCollectVO3">
+        SELECT
+            mo.OPERATION_ID,
+            lower( 'hme_eo_job_data_record_' || mo.OPERATION_NAME ) AS table_name
+        FROM
+            tarzan_mes.mt_operation mo
+        WHERE
+            EXISTS (
+                    SELECT
+                        1
+                    FROM
+                        tarzan_mes.mt_operation_wkc_dispatch_rel mowdr
+                    WHERE
+                        mo.OPERATION_ID = mowdr.OPERATION_ID
+                      AND mowdr.WORKCELL_ID = #{processId}
+                      AND mo.TENANT_ID = #{tenantId}
+                )
+    </select>
+
+    <select id="gpSelectList" resultType="com.ruike.hme.domain.vo.HmeProcessCollectVO2">
+        SELECT
+        hejdr.job_id,
+        hejdr.eo_id,
+        hejdr.eo_num,
+        hejdr.work_order_id,
+        hejdr.work_order_num,
+        hejdr.wo_material_id,
+        hejdr.wo_material_code,
+        hejdr.wo_material_name,
+        hejdr.material_lot_id,
+        mml.material_lot_code,
+        hejdr.sn_material_id,
+        hejdr.sn_material_code,
+        hejdr.sn_material_name,
+        hejdr.site_in_date,
+        hejdr.site_in_by,
+        hejdr.site_in_login_name,
+        hejdr.site_in_real_name,
+        hejdr.site_out_date,
+        hejdr.site_out_by,
+        hejdr.site_out_login_name,
+        hejdr.site_out_real_name,
+        hejdr.shift_date,
+        hejdr.shift_code,
+        hejdr.workcell_id,
+        hejdr.workcell_code,
+        hejdr.workcell_name,
+        hejdr.process_id,
+        hejdr.process_code,
+        hejdr.process_name,
+        hejdr.line_id,
+        hejdr.line_code,
+        hejdr.line_name,
+        hejdr.prod_line_id,
+        hejdr.prod_line_code,
+        hejdr.prod_line_name,
+        hejdr.workshop_id,
+        hejdr.workshop_code,
+        hejdr.workshop_name,
+        hejdr.division_id,
+        hejdr.division_code,
+        hejdr.division_name
+        <if test="dto.resultFieldList!=null and dto.resultFieldList.size() > 0">
+            ,
+            <foreach collection="dto.resultFieldList" item="i" separator="," index="index">
+                hejdr.${i}
+            </foreach>
+        </if>
+        FROM
+        tarzan_mes."${dto.tableName}" hejdr,
+        tarzan_mes.mt_material_lot mml
+        WHERE
+        mml.material_lot_id = hejdr.material_lot_id
+        <if test="dto.startTime != null">
+            AND hejdr.site_in_date &gt;= #{dto.startTime}
+        </if>
+        <if test="dto.endTime != null">
+            AND hejdr.site_in_date &lt;= #{dto.endTime}
+        </if>
+        <if test="dto.workOrderNumList!=null and dto.workOrderNumList.size() > 0">
+            AND hejdr.work_order_num IN (
+            <foreach collection="dto.workOrderNumList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.materialCodeList!=null and dto.materialCodeList.size() > 0">
+            AND hejdr.sn_material_code IN (
+            <foreach collection="dto.materialCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.snList!=null and dto.snList.size() > 0">
+            AND mml.material_lot_code IN (
+            <foreach collection="dto.snList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.processCodeList!=null and dto.processCodeList.size() > 0">
+            AND hejdr.process_id IN (
+            <foreach collection="dto.processCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.workcellCodeList!=null and dto.workcellCodeList.size() > 0">
+            AND hejdr.workcell_id IN (
+            <foreach collection="dto.workcellCodeList" item="i" separator="," index="index">
+                #{i}
+            </foreach>
+            )
+        </if>
+        <if test="dto.shiftDate != null">
+            AND hejdr.shift_date = #{dto.shiftDate}
+        </if>
+        <if test="dto.shiftCode != null and dto.shiftCode != ''">
+            <bind name="shiftCodeLike" value="dto.shiftCode+'%'"/>
+            AND hejdr.shift_code like #{shiftCodeLike}
+        </if>
+    </select>
+
+    <select id="gpSelectMaxSeqNum" resultType="java.lang.Integer">
+        SELECT
+            max( hejdra.seq_num )
+        FROM
+            tarzan_mes.hme_eo_job_data_record_attr hejdra
+        WHERE hejdra.tenant_id = #{tenantId}
+          AND hejdra.operation_id = #{operationId}
+    </select>
+
+    <select id="gpSelectDynamicColDesc" resultType="java.lang.String">
+        SELECT
+            mt.tag_description
+        FROM
+            tarzan_mes.hme_eo_job_data_record_attr hejdra,
+            tarzan_mes.mt_tag mt
+        WHERE
+            mt.tenant_id = hejdra.tenant_id
+          AND mt.tag_code = hejdra.attr_value
+          AND hejdra.tenant_id = #{tenantId}
+          AND hejdra.operation_id = #{operationId}
+        ORDER BY
+            hejdra.operation_id,
+            hejdra.seq_num ASC
+    </select>
+
+</mapper>

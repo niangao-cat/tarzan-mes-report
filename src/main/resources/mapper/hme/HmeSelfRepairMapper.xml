@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeSelfRepairMapper">
+    <select id="fetchList" resultType="com.ruike.hme.domain.vo.HmeSelfRepairVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT
+        ifnull(ea.ATTR_VALUE,me.IDENTIFICATION) repair_sn_num,
+        me.IDENTIFICATION,
+        mmsa.ATTR_VALUE MATERIAL_MODEL,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        mml.enable_flag,
+        (CASE WHEN IFNULL(mml_mf.ATTR_VALUE, '') != 'Y' THEN 'N' ELSE 'Y' END) MF_FLAG,
+        me.`STATUS` MATERIAL_LOT_CODE_STATUS,
+        mwo.WORK_ORDER_NUM,
+        mwo.`STATUS` WORK_ORDER_STATUS,
+        (CASE WHEN IFNULL(wa.RELEASED_QTY, 0) > 0 THEN 'Y' ELSE 'N' END) CREATE_SN_FLAG,
+        DATE_FORMAT(mwo.CREATION_DATE,'%Y-%m-%d %H:%i:%s') ACTUAL_START_DATE,
+        date_format(wa.ACTUAL_END_DATE,'%Y-%m-%d %H:%i:%s') ACTUAL_END_DATE,
+        ml_p.locator_code WAREHOUSE_CODE,
+        ml_p.locator_name WAREHOUSE_NAME,
+        ml_p.LOCATOR_TYPE WAREHOUSE_TYPE,
+        mgtl.DESCRIPTION WAREHOUSE_TYPE_MEANING,
+        ml.locator_code,
+        ml.locator_name,
+        mma.area_name,
+        hrwoc.CREATED_BY
+        FROM
+        mt_work_order mwo
+        LEFT JOIN mt_mod_organization_rel mor4 ON mor4.ORGANIZATION_ID = mwo.PRODUCTION_LINE_ID
+        AND mor4.ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor4.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor4.ORGANIZATION_ID IS NOT NULL
+        LEFT JOIN mt_mod_organization_rel mor5 ON mor5.ORGANIZATION_ID = mor4.PARENT_ORGANIZATION_ID
+        AND mor5.ORGANIZATION_TYPE = 'AREA'
+        AND mor5.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor5.ORGANIZATION_ID IS NOT NULL
+        LEFT JOIN mt_mod_organization_rel mor6 ON mor6.ORGANIZATION_ID = mor5.PARENT_ORGANIZATION_ID
+        AND mor6.ORGANIZATION_TYPE = 'AREA'
+        AND mor6.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor6.ORGANIZATION_ID IS NOT NULL
+        LEFT JOIN mt_mod_area mma ON mma.AREA_ID = mor6.ORGANIZATION_ID
+        LEFT JOIN mt_eo me ON me.WORK_ORDER_ID = mwo.WORK_ORDER_ID
+        LEFT JOIN mt_eo_attr ea on ea.EO_ID = me.EO_ID
+        AND ea.TENANT_ID = #{tenantId}
+        and ea.attr_name = 'REWORK_MATERIAL_LOT'
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id
+        LEFT JOIN mt_material_lot mml ON mml.MATERIAL_ID = mm.MATERIAL_ID
+        AND mml.MATERIAL_LOT_code = ifnull(ea.ATTR_VALUE,me.IDENTIFICATION)
+        LEFT JOIN mt_material_lot_attr mml_mf ON mml_mf.material_lot_id = mml.material_lot_id
+        AND mml_mf.attr_name = 'MF_FLAG'
+        LEFT JOIN mt_mod_locator ml ON ml.LOCATOR_ID = mml.LOCATOR_ID
+        LEFT JOIN mt_mod_locator ml_p ON ml_p.LOCATOR_ID = ml.PARENT_LOCATOR_ID
+        LEFT JOIN mt_gen_type mgt ON mgt.type_code = ml_p.locator_type
+        AND mgt.type_group = 'LOCATOR_TYPE'
+        LEFT JOIN mt_gen_type_tl mgtl ON mgtl.gen_type_id = mgt.gen_type_id
+        AND mgtl.lang = #{lang}
+        LEFT JOIN mt_material_site mms ON mm.material_id = mms.material_id
+        LEFT JOIN mt_material_site_attr mmsa ON mmsa.material_site_id = mms.material_site_id
+        AND mmsa.attr_name = 'attribute5'
+        LEFT JOIN mt_work_order_actual wa ON wa.work_order_id = mwo.work_order_id
+        LEFT JOIN hme_repair_work_order_create hrwoc ON hrwoc.WORK_ORDER_NUM = mwo.WORK_ORDER_NUM
+        WHERE
+        mwo.TENANT_ID = #{tenantId}
+        AND mwo.WORK_ORDER_TYPE = 'RK10'
+        AND NOT EXISTS (SELECT 1 FROM hme_service_split_record hssr WHERE hssr.work_order_num = mwo.WORK_ORDER_NUM)
+        <if test="dto.areaId !=null and dto.areaId != '' ">
+            AND mor6.ORGANIZATION_ID = #{dto.areaId}
+        </if>
+        <if test="dto.repairSnNumList !=null and dto.repairSnNumList.size() > 0">
+            and (me.IDENTIFICATION IN
+            <foreach collection="dto.repairSnNumList" item="snNum" index="index" separator="," open="(" close=")">
+                #{snNum}
+            </foreach>
+            or ea.ATTR_VALUE IN
+            <foreach collection="dto.repairSnNumList" item="snNum" index="index" separator="," open="(" close=")">
+                #{snNum}
+            </foreach>)
+        </if>
+        <if test="dto.createdBy !=null and dto.createdBy !='' ">
+            and hrwoc.created_by = #{dto.createdBy}
+        </if>
+        <if test="dto.workOrderNum !=null and dto.workOrderNum != '' ">
+            and mwo.WORK_ORDER_NUM = #{dto.workOrderNum}
+        </if>
+        <if test="dto.workOrderStatusList != null and dto.workOrderStatusList.size() > 0">
+            AND mwo.STATUS IN
+            <foreach collection="dto.workOrderStatusList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList !=null and dto.materialCodeList.size() > 0">
+            and mm.MATERIAL_CODE IN
+            <foreach collection="dto.materialCodeList" index="index" item="materialCode" separator="," open="(" close=")">
+                #{materialCode}
+            </foreach>
+        </if>
+        <if test="dto.mfFlag != null and dto.mfFlag != '' ">
+            <choose>
+                <when test='dto.mfFlag == "Y"'>
+                    AND mml_mf.ATTR_VALUE = #{dto.mfFlag}
+                </when>
+                <otherwise>
+                    AND (mml_mf.ATTR_VALUE is null OR mml_mf.ATTR_VALUE = '')
+                </otherwise>
+            </choose>
+        </if>
+        <if test="dto.createSnFlag != null and dto.createSnFlag != ''">
+            <choose>
+                <when test='dto.createSnFlag == "Y"'>
+                    AND IFNULL(wa.RELEASED_QTY,0) > 0
+                </when>
+                <otherwise>
+                    AND (
+                    wa.RELEASED_QTY is NULL OR
+                    wa.RELEASED_QTY = '' OR
+                    wa.RELEASED_QTY <![CDATA[<=]]>  0
+                    )
+                </otherwise>
+            </choose>
+        </if>
+        <if test="dto.enabledFlag != null and dto.enabledFlag != ''">
+            AND mml.ENABLE_FLAG = #{dto.enabledFlag}
+        </if>
+        <if test="dto.materialLotCodeStatusList != null and dto.materialLotCodeStatusList.size() > 0">
+            AND me.`STATUS` IN
+            <foreach collection="dto.materialLotCodeStatusList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.actualStartDateFrom != null and dto.actualStartDateFrom != ''">
+            AND mwo.CREATION_DATE >= #{dto.actualStartDateFrom}
+        </if>
+        <if test="dto.actualStartDateTo != null and dto.actualStartDateTo != ''">
+            AND mwo.CREATION_DATE <![CDATA[<=]]> #{dto.actualStartDateTo}
+        </if>
+        <if test="dto.actualEndDateFrom != null and dto.actualEndDateFrom != ''">
+            AND wa.ACTUAL_END_DATE >= #{dto.actualEndDateFrom}
+        </if>
+        <if test="dto.actualEndDateTo != null and dto.actualEndDateTo != ''">
+            AND wa.ACTUAL_END_DATE <![CDATA[<=]]> #{dto.actualEndDateTo}
+        </if>
+        <if test="dto.warehouseCode != null and dto.warehouseCode != '' ">
+            and ml_p.locator_code like concat(#{dto.warehouseCode},'%')
+        </if>
+        ORDER BY ACTUAL_START_DATE desc
+    </select>
+
+    <select id="queryWorkcell" resultType="com.ruike.hme.domain.vo.HmeCosWorkcellExceptionVO">
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME
+        FROM
+        mt_work_order mwo,
+        mt_eo me,
+        mt_eo_router_actual ra,
+        mt_eo_step_actual sa,
+        mt_eo_step_wip sw,
+        mt_mod_workcell mmw
+        WHERE
+        mwo.TENANT_ID = #{tenantId}
+        AND me.WORK_ORDER_id = mwo.WORK_ORDER_id
+        AND ra.EO_ID = me.EO_ID
+        AND sw.TENANT_ID = sa.TENANT_ID
+        AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+        AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+        AND mmw.workcell_id = sw.workcell_id
+        AND mwo.WORK_ORDER_NUM IN
+        <foreach collection="workOrderNumList" item="woNum" separator="," index="index" open="(" close=")">
+            #{woNum}
+        </foreach>
+    </select>
+</mapper>

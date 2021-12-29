@@ -1,0 +1,316 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeProLineDetailsWipMapper">
+
+    <select id="getSiteIdByUserId" resultType="java.lang.String">
+        SELECT MUO.ORGANIZATION_ID
+        FROM mt_user_organization MUO
+        WHERE MUO.ORGANIZATION_TYPE = 'SITE'
+          AND MUO.USER_ID = #{userId}
+          AND MUO.ENABLE_FLAG = 'Y'
+          AND MUO.DEFAULT_ORGANIZATION_FLAG = 'Y'
+    </select>
+
+    <select id="queryProductDetails" resultType="com.ruike.hme.api.dto.HmeProductionQueryDTO">
+        SELECT DISTINCT
+        eo.site_id,
+        mms.SITE_NAME,
+        mpl.PROD_LINE_ID,
+        mpl.PROD_LINE_NAME,
+        mm.MATERIAL_ID,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        mmas.MATERIAL_SITE_ID
+        FROM
+        mt_eo eo,
+        mt_mod_production_line mpl,
+        mt_mod_site mms,
+        mt_material mm,
+        mt_material_site mmas
+        WHERE
+        eo.MATERIAL_ID = mm.MATERIAL_ID
+        AND mms.SITE_ID = eo.SITE_ID
+        AND mmas.site_id = eo.site_id
+        AND mmas.material_id = eo.material_id
+        AND mpl.PROD_LINE_ID = eo.PRODUCTION_LINE_ID
+        AND eo.`STATUS` = 'WORKING'
+        AND eo.TENANT_ID = #{tenantId}
+        AND eo.site_id = #{siteId}
+        AND eo.PRODUCTION_LINE_ID = #{prodLineId}
+        <if test="materialId != null and materialId != ''">
+            and FIND_IN_SET(eo.MATERIAL_ID , #{materialId} )
+        </if>
+    </select>
+
+    <select id="selectQueueNumByMaterialList" resultType="com.ruike.hme.domain.vo.HmeEoVO">
+        SELECT
+        eo.MATERIAL_ID,
+        IFNULL( sum( EO.QTY ), 0 ) qty
+        FROM
+        mt_eo eo,
+        mt_work_order wo
+        WHERE
+        eo.TENANT_ID = #{tenantId}
+        AND eo.`STATUS` = 'WORKING'
+        AND eo.production_line_id = #{prodLineId}
+        and eo.material_id in
+        <foreach collection="materialIdList" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+        and eo.SITE_ID = #{siteId}
+        and eo.WORK_ORDER_ID = wo.WORK_ORDER_ID
+        AND NOT EXISTS ( SELECT 1 FROM hme_eo_job_sn sn WHERE sn.eo_id = eo.EO_ID )
+        GROUP BY
+        eo.material_id
+    </select>
+
+    <select id="selectUnCountByMaterialList" resultType="com.ruike.hme.domain.vo.HmeEoVO">
+        SELECT
+        eo.material_id,
+        IFNULL( sum( eo.QTY ), 0 ) qty
+        FROM
+        mt_eo eo
+        left join mt_work_order wo on wo.work_order_id = eo.work_order_id,
+        mt_material_lot mml,
+        mt_material_lot_attr la,
+        mt_mod_locator ml,
+        mt_mod_locator ml_p
+        WHERE
+        eo.IDENTIFICATION = mml.MATERIAL_LOT_CODE
+        and mml.ENABLE_FLAG = 'Y'
+        AND mml.MATERIAL_LOT_ID = la.MATERIAL_LOT_ID
+        AND la.ATTR_NAME = 'MF_FLAG'
+        AND la.ATTR_VALUE = ''
+        AND mml.LOCATOR_ID = ml.LOCATOR_ID
+        AND ml_p.LOCATOR_ID = ml.PARENT_LOCATOR_ID
+        AND ml_p.LOCATOR_TYPE = '14'
+        and eo.material_id in
+        <foreach collection="materialIdList" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+        AND eo.TENANT_ID = #{tenantId}
+        AND eo.PRODUCTION_LINE_ID = #{prodLineId}
+        GROUP BY eo.material_id
+    </select>
+
+    <select id="batchQueryWorkingQTYAndCompletedQTY" resultType="com.ruike.hme.domain.vo.HmeProductDetailsVO">
+        select
+        me.material_id as materialid,
+        mmw_process.workcell_id as workcellid,
+        mmw_process.WORKCELL_CODE,
+        mmw_process.workcell_name as description,
+        mmor_pl_wkc.sequence,
+        mmor_wkc_prc.sequence sequence2,
+        ifnull(sum(meswa.working_qty),0) as runNum,
+        ifnull(sum(meswa.completed_qty),0) as finishNum
+        from
+        mt_mod_workcell mmw_process,
+        mt_mod_organization_rel mmor_pl_wkc,
+        mt_mod_organization_rel mmor_wkc_prc,
+        mt_mod_organization_rel mmor_prc_site
+        left join mt_eo_step_wip meswa on mmor_prc_site.ORGANIZATION_ID = meswa.workcell_id
+        left join mt_eo_step_actual mesa on meswa.eo_step_actual_id = mesa.eo_step_actual_id
+        left join mt_eo_router_actual mera on mesa.eo_router_actual_id = mera.eo_router_actual_id
+        left join mt_eo me on mera.EO_ID = me.EO_ID and me.material_id in
+        <foreach collection="materialIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        where mmor_pl_wkc.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mmor_pl_wkc.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_pl_wkc.ORGANIZATION_ID = mmor_wkc_prc.PARENT_ORGANIZATION_ID
+        AND mmor_wkc_prc.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_wkc_prc.ORGANIZATION_ID = mmw_process.WORKCELL_ID
+        AND mmor_wkc_prc.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_prc_site.PARENT_ORGANIZATION_ID = mmw_process.WORKCELL_ID
+        AND mmor_prc_site.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_prc_site.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor_pl_wkc.TOP_SITE_ID = mmor_wkc_prc.TOP_SITE_ID
+        and mmor_wkc_prc.TOP_SITE_ID = mmor_prc_site.TOP_SITE_ID
+        and mmor_pl_wkc.TOP_SITE_ID = #{siteId}
+        and mmor_pl_wkc.TENANT_ID = #{tenantId}
+        and mmor_pl_wkc.PARENT_ORGANIZATION_ID = #{prodLineId}
+        and me.`status` = 'WORKING'
+        group by me.material_id,
+        mmw_process.workcell_id,
+        mmw_process.workcell_name,
+        mmor_pl_wkc.SEQUENCE,
+        mmor_wkc_prc.SEQUENCE
+        order by mmor_pl_wkc.SEQUENCE,
+        mmor_wkc_prc.SEQUENCE
+    </select>
+
+    <select id="queryProductEoListByRun" resultType="com.ruike.hme.domain.vo.HmeProductEoInfoVO">
+        SELECT
+        me.IDENTIFICATION AS eoIdentification,
+        ea.ATTR_VALUE REWORK_MATERIAL_LOT_CODE,
+        me.EO_NUM AS eoNum,
+        wo.WORK_ORDER_NUM AS workOrderNum,
+        mesa.REWORK_STEP_FLAG VALIDATE_FLAG,
+        meswa.LAST_UPDATE_DATE AS lastUpdateDate,
+        TIMESTAMPDIFF(
+        MINUTE,
+        meswa.LAST_UPDATE_DATE,
+        NOW()) AS timeDiff
+        FROM
+        mt_eo me
+        LEFT JOIN mt_work_order wo ON wo.WORK_ORDER_ID = me.WORK_ORDER_ID
+        LEFT JOIN mt_eo_attr ea ON ea.eo_id = me.eo_id AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT',
+        mt_eo_router_actual mera,
+        mt_eo_step_actual mesa,
+        mt_eo_step_wip meswa,
+        mt_mod_organization_rel mmor
+        WHERE
+        me.TENANT_ID = #{tenantId}
+        AND meswa.workcell_id = mmor.ORGANIZATION_ID
+        AND mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND MMOR.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND me.status = 'WORKING'
+        AND me.EO_ID = mera.EO_ID
+        AND mesa.eo_router_actual_id = mera.eo_router_actual_id
+        AND meswa.eo_step_actual_id = mesa.eo_step_actual_id
+        <if test="eoIdentification != null and eoIdentification != ''">
+            AND me.IDENTIFICATION LIKE CONCAT("%",#{eoIdentification},"%")
+        </if>
+        AND me.MATERIAL_ID = #{materialId}
+        AND meswa.WORKING_QTY > 0
+        AND MMOR.TOP_SITE_ID = #{siteId}
+        AND MMOR.PARENT_ORGANIZATION_ID = #{workcellId}
+        ORDER BY meswa.LAST_UPDATE_DATE DESC
+    </select>
+
+    <select id="queryProductEoListByFinish" resultType="com.ruike.hme.domain.vo.HmeProductEoInfoVO">
+        SELECT
+        me.IDENTIFICATION AS eoIdentification,
+        me.EO_NUM AS eoNum,
+        wo.WORK_ORDER_NUM AS workOrderNum,
+        mesa.REWORK_STEP_FLAG VALIDATE_FLAG,
+        meswa.LAST_UPDATE_DATE AS lastUpdateDate,
+        TIMESTAMPDIFF(
+        MINUTE,
+        meswa.LAST_UPDATE_DATE,
+        NOW()) AS timeDiff
+        FROM
+        mt_eo me
+        LEFT JOIN mt_work_order wo ON wo.WORK_ORDER_ID = me.WORK_ORDER_ID,
+        mt_eo_router_actual mera,
+        mt_eo_step_actual mesa,
+        mt_eo_step_wip meswa,
+        mt_mod_organization_rel mmor
+        WHERE
+            me.EO_ID = mera.EO_ID
+        AND mesa.eo_router_actual_id = mera.eo_router_actual_id
+        AND meswa.eo_step_actual_id = mesa.eo_step_actual_id
+        AND meswa.workcell_id = mmor.ORGANIZATION_ID
+        AND  mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND MMOR.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND me.status = 'WORKING'
+        AND me.MATERIAL_ID = #{materialId}
+        AND meswa.COMPLETED_QTY > 0
+        AND MMOR.TOP_SITE_ID = #{siteId}
+        AND me.TENANT_ID = #{tenantId}
+        AND MMOR.PARENT_ORGANIZATION_ID = #{workcellId}
+        ORDER BY meswa.LAST_UPDATE_DATE DESC
+    </select>
+
+    <select id="queryProductEoListByQueueQty" resultType="com.ruike.hme.domain.vo.HmeProductEoInfoVO">
+     SELECT
+	    eo.EO_NUM,
+	    wo.WORK_ORDER_NUM,
+	    eo.IDENTIFICATION EO_IDENTIFICATION,
+	    eo.CREATION_DATE LAST_UPDATE_DATE,
+	    TIMESTAMPDIFF(
+		MINUTE,
+		eo.CREATION_DATE,
+	    NOW()) AS timeDiff
+    FROM
+	    mt_eo eo,
+	    mt_work_order wo
+    WHERE
+	    eo.TENANT_ID = #{tenantId}
+	AND eo.TENANT_ID = wo.TENANT_ID
+	AND eo.WORK_ORDER_ID = wo.WORK_ORDER_ID
+	AND eo.`STATUS` = 'WORKING'
+	AND eo.production_line_id = #{productionLineId}
+	AND eo.material_id = #{materialId}
+	and eo.SITE_ID = #{siteId}
+	AND NOT EXISTS ( SELECT 1 FROM hme_eo_job_sn sn WHERE sn.eo_id = eo.EO_ID )
+	ORDER BY eo.CREATION_DATE DESC
+    </select>
+
+    <select id="queryProductEoListByNoCount" resultType="com.ruike.hme.domain.vo.HmeProductEoInfoVO">
+    SELECT
+        eo.IDENTIFICATION AS eoIdentification,
+        eo.EO_NUM,
+        wo.WORK_ORDER_NUM
+    FROM
+        mt_eo eo
+    left join mt_work_order wo on wo.work_order_id = eo.work_order_id,
+    mt_material_lot mml,
+    mt_material_lot_attr la,
+    mt_mod_locator ml,
+    mt_mod_locator ml_p
+    WHERE
+    eo.IDENTIFICATION = mml.MATERIAL_LOT_CODE
+    AND mml.MATERIAL_LOT_ID = la.MATERIAL_LOT_ID
+    and mml.ENABLE_FLAG = 'Y'
+    AND la.ATTR_NAME = 'MF_FLAG'
+    AND la.ATTR_VALUE = ''
+    AND mml.LOCATOR_ID = ml.LOCATOR_ID
+    AND ml_p.LOCATOR_ID = ml.PARENT_LOCATOR_ID
+    AND ml_p.LOCATOR_TYPE = '14'
+    AND eo.TENANT_ID = #{tenantId}
+    AND eo.MATERIAL_ID = #{materialId}
+    AND eo.PRODUCTION_LINE_ID = #{productionLineId}
+    </select>
+
+    <select id="processQtyQuery" resultType="com.ruike.hme.domain.vo.HmeProductionLineDetailsVO3">
+        select
+        mmw_process.workcell_id as workcellid,
+        mmor_pl_wkc.sequence,
+        mmor_wkc_prc.sequence sequence2,
+        floor(ifnull(sum(meswa.working_qty),0) +
+        ifnull(sum(meswa.completed_qty),0)) as total_qty
+        from
+        mt_mod_workcell mmw_process,
+        mt_mod_organization_rel mmor_pl_wkc,
+        mt_mod_organization_rel mmor_wkc_prc,
+        mt_mod_organization_rel mmor_prc_site
+        left join mt_eo_step_wip meswa on mmor_prc_site.ORGANIZATION_ID = meswa.workcell_id
+        left join mt_eo_step_actual mesa on meswa.eo_step_actual_id = mesa.eo_step_actual_id
+        left join mt_eo_router_actual mera on mesa.eo_router_actual_id = mera.eo_router_actual_id
+        left join mt_eo me on mera.EO_ID = me.EO_ID
+        left join mt_material mm on mm.MATERIAL_ID = me.MATERIAL_ID
+        where mmor_pl_wkc.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mmor_pl_wkc.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_pl_wkc.ORGANIZATION_ID = mmor_wkc_prc.PARENT_ORGANIZATION_ID
+        AND mmor_wkc_prc.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_wkc_prc.ORGANIZATION_ID = mmw_process.WORKCELL_ID
+        AND mmor_wkc_prc.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_prc_site.PARENT_ORGANIZATION_ID = mmw_process.WORKCELL_ID
+        AND mmor_prc_site.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mmor_prc_site.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor_pl_wkc.TOP_SITE_ID = mmor_wkc_prc.TOP_SITE_ID
+        and mmor_wkc_prc.TOP_SITE_ID = mmor_prc_site.TOP_SITE_ID
+        and mmor_pl_wkc.TOP_SITE_ID = #{siteId}
+        and mmor_pl_wkc.TENANT_ID = #{tenantId}
+        and mmor_pl_wkc.PARENT_ORGANIZATION_ID = #{prodLineId}
+        and me.`status` = 'WORKING'
+        and mm.MATERIAL_NAME is not null
+        <if test="materialId != null and materialId != ''">
+            and FIND_IN_SET(me.MATERIAL_ID, #{materialId} )
+        </if>
+        group by
+        mmw_process.workcell_id,
+        mmor_pl_wkc.SEQUENCE,
+        mmor_wkc_prc.SEQUENCE
+        order by mmor_pl_wkc.SEQUENCE,
+        mmor_wkc_prc.SEQUENCE
+    </select>
+
+    <select id="getWorkcellScheduleVO" resultType="com.ruike.hme.domain.vo.HmeWorkcellScheduleVO">
+        select t.RATE, t.RATE_TYPE, t.ACTIVITY
+        from mt_mod_workcell_schedule t
+        where t.WORKCELL_ID = #{workcellId}
+        and t.TENANT_ID = #{tenantId}
+    </select>
+</mapper>

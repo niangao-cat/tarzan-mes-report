@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosStaffProductMapper">
+
+    <select id="staffProductQuery" resultType="com.ruike.hme.domain.vo.HmeCosStaffProductVO2">
+        SELECT
+        	ejs.site_in_by,
+        	ejs.ATTRIBUTE3 cos_type,
+        	mor.PARENT_ORGANIZATION_ID process_id,
+            mmw.WORKCELL_NAME process_name,
+        	mm.MATERIAL_CODE,
+        	mm.MATERIAL_NAME,
+            wo.PRODUCTION_VERSION,
+        	IFNULL(SUM(ejs.sn_qty), 0) total_sn_qty,
+            ROUND(SUM(timestampdiff(second, ejs.site_in_date, ejs.site_out_date))/60/60,2) duration,
+        	COUNT(cnr.cos_nc_record_id) nc_qty
+        FROM
+        	hme_eo_job_sn ejs
+        	LEFT JOIN mt_material mm ON mm.material_id = ejs.sn_material_id
+        	LEFT JOIN hme_cos_nc_record cnr ON cnr.JOB_ID = ejs.JOB_ID AND cnr.TENANT_ID = ejs.TENANT_ID
+            LEFT JOIN mt_work_order wo ON wo.WORK_ORDER_ID = ejs.WORK_ORDER_ID,
+            mt_mod_organization_rel mor,
+            mt_mod_workcell mmw
+        WHERE ejs.tenant_id = #{tenantId}
+        AND ejs.job_type IN
+        <foreach collection="jobTypeList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND ejs.site_in_date >= #{dto.createDateFrom}
+        AND ejs.site_in_date <![CDATA[<=]]> #{dto.createDateTo}
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND ejs.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+            AND ejs.ATTRIBUTE3 IN
+            <foreach collection="dto.cosTypeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        AND mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID = ejs.workcell_id
+        AND mor.TENANT_ID = ejs.tenant_id
+        AND mmw.WORKCELL_ID = mor.PARENT_ORGANIZATION_ID
+        AND mmw.TENANT_ID = mor.TENANT_ID
+        AND mmw.WORKCELL_TYPE = 'PROCESS'
+        <if test="dto.userIdList != null and dto.userIdList.size() > 0">
+            AND ejs.site_in_by IN
+            <foreach collection="dto.userIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            AND mm.MATERIAL_CODE IN
+            <foreach collection="dto.materialCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialVersionList != null and dto.materialVersionList.size() > 0">
+            AND wo.PRODUCTION_VERSION IN
+            <foreach collection="dto.materialVersionList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        GROUP BY
+        	ejs.site_in_by,
+        	ejs.ATTRIBUTE3,
+        	mor.PARENT_ORGANIZATION_ID,
+            mmw.WORKCELL_NAME,
+        	mm.MATERIAL_CODE,
+        	mm.MATERIAL_NAME,
+            wo.PRODUCTION_VERSION
+    </select>
+
+    <select id="queryOrganizationInfo" resultType="com.ruike.hme.domain.vo.HmeCosStaffProductVO3">
+        SELECT
+			mor2.ORGANIZATION_ID process_id,
+			mmw.WORKCELL_NAME line_workcell_name,
+			mmw.WORKCELL_ID line_workcell_id,
+			pl.PROD_LINE_ID prod_line_id,
+			pl.PROD_LINE_NAME
+        FROM
+        mt_mod_organization_rel mor1
+        ,mt_mod_organization_rel mor2
+        ,mt_mod_organization_rel mor3,
+		mt_mod_workcell mmw,
+		mt_mod_production_line pl
+        WHERE
+            mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.ORGANIZATION_TYPE ='WORKCELL'
+        AND mor1.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+		AND mor2.ORGANIZATION_ID IN
+		<foreach collection="processIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND	mor2.ORGANIZATION_ID = mor1.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor1.TENANT_ID
+        AND mor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor3.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mor3.TENANT_ID = mor2.TENANT_ID
+		AND mmw.WORKCELL_ID = mor3.ORGANIZATION_ID
+		AND pl.PROD_LINE_ID = mor3.PARENT_ORGANIZATION_ID
+    </select>
+
+    <select id="queryWorkcellByProcessId" resultType="java.lang.String">
+        SELECT
+            mor.ORGANIZATION_ID
+        FROM
+        mt_mod_organization_rel mor,
+        mt_mod_workcell mmw
+        WHERE mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.PARENT_ORGANIZATION_ID IN
+        <foreach collection="processIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.TENANT_ID = #{tenantId}
+    </select>
+
+    <select id="queryWorkcellByLineWorkcellId" resultType="java.lang.String">
+        SELECT
+        mor.ORGANIZATION_ID
+        FROM
+        mt_mod_organization_rel mor,
+        mt_mod_organization_rel mor2
+        WHERE mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.PARENT_ORGANIZATION_ID IN
+        <foreach collection="lineWorkcellIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor.TENANT_ID
+    </select>
+
+    <select id="queryWorkcellByProdLineId" resultType="java.lang.String">
+        SELECT
+            mor1.ORGANIZATION_ID
+        FROM
+        mt_mod_organization_rel mor1
+        ,mt_mod_organization_rel mor2
+        ,mt_mod_organization_rel mor3
+        WHERE
+            mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.ORGANIZATION_TYPE ='WORKCELL'
+        AND mor1.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND	mor2.ORGANIZATION_ID = mor1.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor1.TENANT_ID
+        AND mor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor3.PARENT_ORGANIZATION_ID IN
+        <foreach collection="prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor3.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mor3.TENANT_ID = mor2.TENANT_ID
+    </select>
+
+</mapper>

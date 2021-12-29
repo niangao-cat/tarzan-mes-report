@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeAfterSalesQuotationMapper">
+
+    <select id="querySalesQuotation" resultType="com.ruike.hme.domain.vo.HmeAfterSalesQuotationVO">
+        SELECT
+                hasqh.creation_date AS creationDate,
+                mmsa.ATTR_VALUE AS model,
+                mml.MATERIAL_LOT_CODE AS serialNumber,
+                mm.MATERIAL_CODE AS productCode,
+                mm.MATERIAL_NAME AS productDescription,
+                hsr.receive_status AS snStatus,
+                IF(IFNULL(hssr.internal_order_num, '') != '', hssr.internal_order_num, hssr.work_order_num) AS WorkOrderNo,
+                mc.CUSTOMER_NAME AS sellerTo,
+                mcs.CUSTOMER_NAME AS servedBy,
+                mmse.MATERIAL_CODE AS replacementMaterialNo,
+                mmse.MATERIAL_NAME AS replacementMaterialDescription,
+                hasql.requset_qty AS quantity,
+                hasql.remark AS remarks,
+                hasqh.`status` AS quotationStatus,
+                hasqh.quotation_code AS sapQuotationNo,
+                hssr.back_type AS returnType,
+                hasqh.created_by AS creator,
+                hasqh.last_update_date AS updateTime,
+                hasqh.last_updated_by AS updater,
+                hasqh.submission_data AS submissionTime,
+                hasqh.submission_by AS submitter,
+                hasqh.optics_no_flag,
+                hasqh.electric_no_flag,
+                hasqh.quotation_header_id,
+                hasqh.ATTRIBUTE1 cancel_reason,
+                hasql.ATTRIBUTE1 situation_desc
+        FROM
+                hme_after_sale_quotation_header hasqh
+                LEFT JOIN mt_material_lot mml ON hasqh.material_lot_id = mml.MATERIAL_LOT_ID
+                AND hasqh.tenant_id = mml.TENANT_ID
+                LEFT JOIN mt_material_site mms ON mml.SITE_ID = mms.SITE_ID
+                AND mml.TENANT_ID = mms.TENANT_ID
+                AND mms.MATERIAL_ID = mml.MATERIAL_ID
+                LEFT JOIN mt_material_site_attr mmsa ON mmsa.MATERIAL_SITE_ID = mms.MATERIAL_SITE_ID
+                AND mmsa.ATTR_NAME = 'attribute5'
+                AND mmsa.TENANT_ID = mmsa.TENANT_ID
+                LEFT JOIN mt_material mm ON mml.MATERIAL_ID = mm.MATERIAL_ID
+                AND mml.TENANT_ID = mm.TENANT_ID
+                LEFT JOIN hme_service_receive hsr ON hasqh.service_receive_id = hsr.service_receive_id
+                AND hasqh.tenant_id = hsr.tenant_id
+                LEFT JOIN hme_service_split_record hssr ON hasqh.service_receive_id = hssr.service_receive_id
+                AND hasqh.tenant_id = hssr.tenant_id
+                AND hssr.top_split_record_id = hssr.split_record_id
+                LEFT JOIN mt_customer mc ON hasqh.sold_to = mc.CUSTOMER_ID
+                AND mc.TENANT_ID = hasqh.tenant_id
+                LEFT JOIN mt_customer mcs ON hasqh.send_to = mcs.CUSTOMER_ID
+                AND mcs.TENANT_ID = hasqh.tenant_id
+                LEFT JOIN hme_after_sale_quotation_line hasql ON hasqh.quotation_header_id = hasql.quotation_header_id
+                AND hasqh.tenant_id = hasql.tenant_id
+                LEFT JOIN mt_material mmse ON hasql.material_id = mmse.MATERIAL_ID
+                AND hasql.tenant_id = mmse.TENANT_ID
+        WHERE
+                hasqh.tenant_id =#{tenantId}
+        <if test="dto.serialNumberList !=null and dto.serialNumberList.size() >0">
+                and mml.MATERIAL_LOT_CODE in
+            <foreach collection="dto.serialNumberList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.productCodeList !=null and dto.productCodeList.size() >0">
+                and mm.MATERIAL_CODE in
+            <foreach collection="dto.productCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.snStatus !=null and dto.snStatus !=''">
+                and hsr.receive_status =#{dto.snStatus}
+        </if>
+        <if test="dto.quotationStatus !=null and dto.quotationStatus !=''">
+                and hasqh.`status` =#{dto.quotationStatus}
+        </if>
+        <if test="dto.servedBy !=null and dto.servedBy !=''">
+                and mcs.CUSTOMER_ID =#{dto.servedBy}
+        </if>
+        <if test="dto.sapQuotationNoList !=null and dto.sapQuotationNoList.size() >0">
+                and hasqh.quotation_code in
+            <foreach collection="dto.sapQuotationNoList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.submitter !=null and dto.submitter !=''">
+                and hasqh.submission_by =#{dto.submitter}
+        </if>
+        <if test="dto.creator !=null and dto.creator !=''">
+                and hasqh.created_by =#{dto.creator}
+        </if>
+        <if test="dto.updater !=null and dto.updater !=''">
+                and hasqh.last_updated_by =#{dto.updater}
+        </if>
+        <if test="dto.sellerTo !=null and dto.sellerTo !=''">
+                and mc.CUSTOMER_ID =#{dto.sellerTo}
+        </if>
+        <if test="dto.returnType !=null and dto.returnType !=''">
+                and hssr.back_type =#{dto.returnType}
+        </if>
+        <if test="dto.model !=null and dto.model !=''">
+                and mmsa.ATTR_VALUE =#{dto.model}
+        </if>
+        <if test="dto.updateTimeFrom != null and dto.updateTimeFrom != ''">
+            AND hasqh.last_update_date <![CDATA[>=]]> #{dto.updateTimeFrom}
+        </if>
+        <if test="dto.updateTimeTo != null and dto.updateTimeTo != ''">
+            AND hasqh.last_update_date <![CDATA[<=]]>#{dto.updateTimeTo}
+        </if>
+        <if test="dto.creationDateFrom != null and dto.creationDateFrom != ''">
+            AND hasqh.creation_date <![CDATA[>=]]> #{dto.creationDateFrom}
+        </if>
+        <if test="dto.creationDateTo != null and dto.creationDateTo != ''">
+            AND hasqh.creation_date <![CDATA[<=]]>#{dto.creationDateTo}
+        </if>
+        <if test="dto.submissionTimeFrom != null and dto.submissionTimeFrom != ''">
+            AND hasqh.submission_data <![CDATA[>=]]> #{dto.submissionTimeFrom}
+        </if>
+        <if test="dto.submissionTimeTo != null and dto.submissionTimeTo != ''">
+            AND hasqh.submission_data <![CDATA[<=]]>#{dto.submissionTimeTo}
+        </if>
+        <if test="dto.cancelReason != null and dto.cancelReason != ''">
+            AND hasqh.ATTRIBUTE1 = #{dto.cancelReason}
+        </if>
+        order by hasqh.last_update_date desc
+    </select>
+
+    <select id="queryItfSnSapIface" resultType="com.ruike.hme.domain.vo.HmeItfSnSapIfaceVO">
+        SELECT
+                issi.last_update_date,
+                issi.sernr
+        FROM
+                itf_sn_sap_iface issi
+        WHERE
+                issi.sernr =#{dto.sernr}
+                AND issi.sttxt =#{dto.sttxt}
+                AND issi.`status` =#{dto.status}
+                AND issi.tenant_id =#{tenantId}
+    </select>
+
+    <select id="querySalesQuotationLine" resultType="com.ruike.hme.domain.vo.HmeAfterSalesQuotationVO2">
+        SELECT
+            asql.quotation_header_id,
+            asql.demand_type,
+            asql.material_id,
+            asql.requset_qty,
+            asql.remark
+        FROM
+            hme_after_sale_quotation_line asql
+        WHERE asql.tenant_id = #{tenantId}
+        AND asql.quotation_header_id IN
+        <foreach collection="quotationHeaderIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+</mapper>

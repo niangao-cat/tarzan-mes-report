@@ -1,0 +1,1114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeInputRecordMapper">
+
+
+    <select id="cosFunctionReport" resultType="com.ruike.hme.domain.vo.HmeInputRecordVO">
+        select
+            tempAll.work_order_num,
+            tempAll.production_version,
+            tempAll.wo_material_code,
+            tempAll.wo_material_name,
+            0 + CAST(tempAll.qty AS CHAR) qty,
+            tempAll.eo_num,
+            tempAll.process_name,
+            tempAll.workcell_code,
+            tempAll.process_sequence,
+            tempAll.login_name,
+            tempAll.real_name,
+            tempAll.job_type,
+            tempAll.identification,
+            tempAll.material_code,
+            tempAll.material_name,
+            tempAll.material_version,
+            0 + CAST(tempAll.bom_qty AS CHAR) bom_qty,
+            tempAll.attrition_chance,
+            tempAll.uom_code,
+            tempAll.lot,
+            tempAll.material_lot_code,
+            0 + CAST(tempAll.release_qty AS CHAR) release_qty,
+            tempAll.creation_date,
+            tempAll.attribute14,
+            tempAll.attribute1,
+            tempAll.y_n,
+            tempAll.virtual_flag,
+            0 + CAST(tempAll.primary_uom_qty AS CHAR) primary_uom_qty
+          from
+            (
+            SELECT
+                mwo.work_order_num,
+                mwo.production_version,
+                mm.material_code wo_material_code,
+                mm.material_name wo_material_name,
+                mwo.qty,
+                me.eo_num,
+                temp.workcell_name process_name,
+                mmw.workcell_code,
+                temp.attr_value process_sequence,
+                ia.login_name,
+                ia.real_name,
+                hejs.job_type,
+                me.identification,
+                mm1.material_code,
+                mm1.material_name,
+                mma.attr_value material_version,
+                NULL bom_qty,
+                NULL attrition_chance,
+                mu.uom_code,
+                mmla.ATTR_VALUE AS lot,
+                mml.material_lot_code,
+                hejm.release_qty,
+                hejm.last_update_date creation_date,
+                mmsa.attr_value attribute14,
+                mmsa1.attr_value attribute1,
+                CASE hejm.is_issued
+                WHEN 1 THEN
+                    '投料'
+                ELSE
+                    '未投料'
+                END y_n,
+                 hejm.virtual_flag,
+                 mml.primary_uom_qty
+            FROM
+                hme_eo_job_material hejm
+            LEFT JOIN (
+                SELECT
+                   mmw1.WORKCELL_ID  process_Id,
+                    mmor.ORGANIZATION_ID,
+                    mmw1.WORKCELL_NAME,
+                    mmwa.ATTR_VALUE
+                FROM
+                    mt_mod_organization_rel mmor,
+                    mt_mod_workcell mmw1
+                LEFT JOIN mt_mod_workcell_attr mmwa ON mmwa.WORKCELL_ID = mmw1.WORKCELL_ID
+                AND mmwa.ATTR_NAME = 'SEQUENCE'
+                WHERE
+                    mmw1.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+                AND mmw1.WORKCELL_type = 'PROCESS'
+            ) temp ON temp.ORGANIZATION_ID = hejm.workcell_id
+            LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejm.workcell_id
+            LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejm.created_by
+            LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejm.material_id
+            AND mms.site_id = #{dto.siteId}
+            AND mms.TENANT_ID = hejm.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+            LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejm.MATERIAL_ID
+                AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejm.TENANT_ID
+            join mt_material mm1 on mm1.material_id = hejm.material_id
+            LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+            join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+            join hme_eo_job_sn hejs on hejm.eo_id = hejs.eo_id
+            join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+            LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+             mt_eo me
+            WHERE
+                1 = 1
+            AND hejm.eo_id = me.EO_ID
+            <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+                AND hejm.last_update_date >= #{dto.createDateFrom}
+            </if>
+            <if test="dto.createDateTo != null and dto.createDateTo != ''">
+                AND hejm.last_update_date <![CDATA[<=]]> #{dto.createDateTo}
+            </if>
+            <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+                and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejm.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and FIND_IN_SET(mmw.workcell_Id,#{dto.workcellId})
+        </if>
+        <if test="dto.materialLotId != null and dto.materialLotId != ''">
+            and hejm.material_lot_id = #{dto.materialLotId}
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            and hejm.material_id = #{dto.materialId}
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and FIND_IN_SET(temp.process_Id,#{dto.processId})
+        </if>
+            UNION
+                SELECT
+                    mwo.work_order_num,
+                    mwo.production_version,
+                    mm.material_code wo_material_code,
+                    mm.material_name wo_material_name,
+                    mwo.qty,
+                    me.eo_num,
+                    temp.workcell_name process_name,
+                    mmw.workcell_code,
+                    temp.attr_value process_sequence,
+                    ia.login_name,
+                    ia.real_name,
+                    hejs.job_type,
+                    me.identification,
+                    mm1.material_code,
+                    mm1.material_name,
+                    mma.attr_value material_version,
+                    NULL bom_qty,
+                    NULL attrition_chance,
+                    mu.uom_code,
+                    mmla.ATTR_VALUE AS lot,
+                    mml.material_lot_code,
+                    hejslm.release_qty,
+                    hejslm.creation_date,
+                    mmsa.attr_value attribute14,
+                    mmsa1.attr_value attribute1,
+                    '投料' y_n,
+                    hejslm.virtual_flag,
+                    mml.primary_uom_qty
+            FROM
+                hme_eo_job_sn_lot_material hejslm
+            LEFT JOIN (
+                SELECT
+                    mmw1.WORKCELL_ID  process_Id,
+                    mmor.ORGANIZATION_ID,
+                    mmw1.WORKCELL_NAME,
+                    mmwa.ATTR_VALUE
+                FROM
+                    mt_mod_organization_rel mmor,
+                    mt_mod_workcell mmw1
+                LEFT JOIN mt_mod_workcell_attr mmwa ON mmwa.WORKCELL_ID = mmw1.WORKCELL_ID
+                AND mmwa.ATTR_NAME = 'SEQUENCE'
+                WHERE
+                    mmw1.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+                AND mmw1.WORKCELL_type = 'PROCESS'
+            ) temp ON temp.ORGANIZATION_ID = hejslm.workcell_id
+            LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejslm.workcell_id
+            LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejslm.created_by
+            LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejslm.material_id
+            AND mms.site_id = #{dto.siteId}
+            AND mms.TENANT_ID = hejslm.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+            LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejslm.MATERIAL_ID
+                AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejslm.TENANT_ID
+             join mt_material mm1 on mm1.material_id = hejslm.material_id
+            LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+            join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejslm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+             join hme_eo_job_sn hejs on hejslm.job_id = hejs.job_id
+            join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+            LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+            mt_eo me
+            WHERE
+                1 = 1
+            AND hejs.eo_id = me.EO_ID
+            <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+                AND hejslm.creation_date >= #{dto.createDateFrom}
+            </if>
+            <if test="dto.createDateTo != null and dto.createDateTo != ''">
+                AND hejslm.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+            </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejs.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and FIND_IN_SET(mmw.workcell_Id,#{dto.workcellId})
+        </if>
+        <if test="dto.materialLotId != null and dto.materialLotId != ''">
+            and hejslm.material_lot_id = #{dto.materialLotId}
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            and hejslm.material_id = #{dto.materialId}
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and FIND_IN_SET(temp.process_Id,#{dto.processId})
+        </if>
+        UNION
+                SELECT
+                    mwo.work_order_num,
+                    mwo.production_version,
+                    mm.material_code wo_material_code,
+                    mm.material_name wo_material_name,
+                    mwo.qty,
+                    '',
+                    '',
+                    '',
+                    '',
+                    ia.login_name,
+                    ia.real_name,
+                    '',
+                    '',
+                    mm1.material_code,
+                    mm1.material_name,
+                    hwir.material_version,
+                    NULL bom_qty,
+                    NULL attrition_chance,
+                    mu.uom_code,
+                    hwir.lot,
+                    mml.material_lot_code,
+                    hwir.qty,
+                    hwir.creation_date,
+                    mmsa.attr_value attribute14,
+                    mmsa1.attr_value attribute1,
+                    CASE hwir.qty
+                    WHEN 0 THEN
+                        '未投料'
+                    ELSE
+                        '投料'
+                    END y_n,
+                    '',
+                    mml.primary_uom_qty
+            FROM
+                hme_wo_input_record hwir
+            LEFT JOIN hzero_platform.iam_user ia ON ia.id = hwir.created_by
+            LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hwir.material_id
+            AND mms.site_id = #{dto.siteId}
+            AND mms.TENANT_ID = hwir.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+            LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+                AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+            join mt_material mm1 on mm1.material_id = hwir.material_id
+            LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+            join mt_material_lot mml  on mml.MATERIAL_LOT_ID = hwir.material_lot_id
+            join mt_work_order mwo on mwo.WORK_ORDER_ID = hwir.work_order_id
+            LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id
+            WHERE
+                1 = 1
+            <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+                AND hwir.creation_date >= #{dto.createDateFrom}
+            </if>
+            <if test="dto.createDateTo != null and dto.createDateTo != ''">
+                AND hwir.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+            </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and 1 = 2
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and 1=2
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and hwir.lot in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and 1 = 2
+        </if>
+        <if test="dto.materialLotId != null and dto.materialLotId != ''">
+            and hwir.material_lot_id = #{dto.materialLotId}
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            and hwir.material_id = #{dto.materialId}
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and 1 =2
+        </if>
+            ) tempAll
+        order by tempAll.creation_date desc ,tempAll.work_order_num ,tempAll.process_sequence
+    </select>
+
+    <select id="cosFunctionReportQuery" resultType="com.ruike.hme.domain.vo.HmeInputRecordVO">
+        select
+        tempAll.work_order_num,
+        tempAll.production_version,
+        tempAll.wo_material_code,
+        tempAll.wo_material_name,
+        0 + CAST(tempAll.qty AS CHAR) qty,
+        tempAll.eo_num,
+        <if test="dto.processId != null and dto.processId != ''">
+            tempAll.process_name,
+            tempAll.process_sequence,
+        </if>
+        tempAll.workcell_code,
+        tempAll.login_name,
+        tempAll.real_name,
+        tempAll.job_type,
+        tempAll.identification,
+        tempAll.material_code,
+        tempAll.material_name,
+        tempAll.material_version,
+        0 + CAST(tempAll.bom_qty AS CHAR) bom_qty,
+        tempAll.attrition_chance,
+        tempAll.uom_code,
+        tempAll.lot,
+        tempAll.material_lot_code,
+        0 + CAST(tempAll.release_qty AS CHAR) release_qty,
+        date_format(tempAll.creation_date, '%Y-%m-%d %H:%i:%s') CREATION_DATE_STR,
+        tempAll.creation_date,
+        tempAll.attribute14,
+        tempAll.attribute1,
+        tempAll.y_n,
+        tempAll.virtual_flag,
+        0 + CAST(tempAll.primary_uom_qty AS CHAR) primary_uom_qty,
+        tempAll.workcell_id
+        from
+        (
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        me.eo_num,
+        <if test="dto.processId != null and dto.processId != ''">
+            temp.workcell_name process_name,
+            temp.attr_value process_sequence,
+        </if>
+        mmw.workcell_code,
+        ia.login_name,
+        ia.real_name,
+        hejs.job_type,
+        me.identification,
+        mm1.material_code,
+        mm1.material_name,
+        mma.attr_value material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        mmla.ATTR_VALUE AS lot,
+        mml.material_lot_code,
+        hejm.release_qty,
+        hejm.last_update_date creation_date,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        CASE hejm.is_issued
+        WHEN 1 THEN
+        '投料'
+        ELSE
+        '未投料'
+        END y_n,
+        hejm.virtual_flag,
+        mml.primary_uom_qty,
+        hejm.workcell_id
+        FROM
+        hme_eo_job_material hejm
+        <if test="dto.processId != null and dto.processId != ''">
+            LEFT JOIN (
+            SELECT
+            mmw1.WORKCELL_ID  process_Id,
+            mmor.ORGANIZATION_ID,
+            mmw1.WORKCELL_NAME,
+            mmwa.ATTR_VALUE
+            FROM
+            mt_mod_organization_rel mmor,
+            mt_mod_workcell mmw1
+            LEFT JOIN mt_mod_workcell_attr mmwa ON mmwa.WORKCELL_ID = mmw1.WORKCELL_ID
+            AND mmwa.ATTR_NAME = 'SEQUENCE'
+            AND mmwa.TENANT_ID = mmw1.TENANT_ID
+            WHERE
+            mmw1.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+            AND mmw1.WORKCELL_type = 'PROCESS'
+            AND mmw1.TENANT_ID = mmor.TENANT_ID
+            ) temp ON temp.ORGANIZATION_ID = hejm.workcell_id
+        </if>
+        LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejm.workcell_id
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hejm.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejm.MATERIAL_ID
+        AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejm.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hejm.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+        join hme_eo_job_sn hejs on hejm.job_id = hejs.job_id
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejs.site_in_by
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+        mt_eo me
+        WHERE
+        1 = 1
+        AND hejm.eo_id = me.EO_ID
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hejm.last_update_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hejm.last_update_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejm.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and FIND_IN_SET(mmw.workcell_Id,#{dto.workcellId})
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hejm.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and FIND_IN_SET(temp.process_Id,#{dto.processId})
+        </if>
+        UNION
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        me.eo_num,
+        <if test="dto.processId != null and dto.processId != ''">
+            temp.workcell_name process_name,
+            temp.attr_value process_sequence,
+        </if>
+        mmw.workcell_code,
+        ia.login_name,
+        ia.real_name,
+        hejs.job_type,
+        me.identification,
+        mm1.material_code,
+        mm1.material_name,
+        mma.attr_value material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        mmla.ATTR_VALUE AS lot,
+        mml.material_lot_code,
+        hejslm.release_qty,
+        hejslm.creation_date,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        '投料' y_n,
+        hejslm.virtual_flag,
+        mml.primary_uom_qty,
+        hejslm.workcell_id
+        FROM
+        hme_eo_job_sn_lot_material hejslm
+        <if test="dto.processId != null and dto.processId != ''">
+            LEFT JOIN (
+            SELECT
+            mmw1.WORKCELL_ID  process_Id,
+            mmor.ORGANIZATION_ID,
+            mmw1.WORKCELL_NAME,
+            mmwa.ATTR_VALUE
+            FROM
+            mt_mod_organization_rel mmor,
+            mt_mod_workcell mmw1
+            LEFT JOIN mt_mod_workcell_attr mmwa ON mmwa.WORKCELL_ID = mmw1.WORKCELL_ID
+            AND mmwa.ATTR_NAME = 'SEQUENCE'
+            AND mmwa.TENANT_ID = mmw1.TENANT_ID
+            WHERE
+            mmw1.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+            AND mmw1.WORKCELL_type = 'PROCESS'
+            AND mmw1.TENANT_ID = mmor.TENANT_ID
+            ) temp ON temp.ORGANIZATION_ID = hejslm.workcell_id
+        </if>
+        LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejslm.workcell_id
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejslm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hejslm.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejslm.MATERIAL_ID
+        AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejslm.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hejslm.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejslm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+        join hme_eo_job_sn hejs on hejslm.job_id = hejs.job_id
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejs.site_in_by
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+        mt_eo me
+        WHERE
+        1 = 1
+        AND hejs.eo_id = me.EO_ID
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hejslm.creation_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hejslm.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejs.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and FIND_IN_SET(mmw.workcell_Id,#{dto.workcellId})
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hejslm.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and FIND_IN_SET(temp.process_Id,#{dto.processId})
+        </if>
+        UNION
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        '',
+        <if test="dto.processId != null and dto.processId != ''">
+            '',
+            '',
+        </if>
+        '',
+        ia.login_name,
+        ia.real_name,
+        '',
+        '',
+        mm1.material_code,
+        mm1.material_name,
+        hwir.material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        hwir.lot,
+        mml.material_lot_code,
+        hwir.qty,
+        hwir.creation_date,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        CASE hwir.qty
+        WHEN 0 THEN
+        '未投料'
+        ELSE
+        '投料'
+        END y_n,
+        '',
+        mml.primary_uom_qty,
+        '' workcell_id
+        FROM
+        hme_wo_input_record hwir
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hwir.created_by
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hwir.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hwir.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hwir.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml  on mml.MATERIAL_LOT_ID = hwir.material_lot_id
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hwir.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id
+        WHERE
+        1 = 1
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hwir.creation_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hwir.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and 1 = 2
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and 1=2
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and hwir.lot in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and 1 = 2
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hwir.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and 1 =2
+        </if>
+        ) tempAll
+        order by tempAll.creation_date desc
+    </select>
+
+    <select id="cosFunctionReportQueryOfSn" resultType="com.ruike.hme.domain.vo.HmeInputRecordVO">
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        me.eo_num,
+        mmw.workcell_code,
+        ia.login_name,
+        ia.real_name,
+        hejs.job_type,
+        me.identification,
+        mm1.material_code,
+        mm1.material_name,
+        mma.attr_value material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        mmla.ATTR_VALUE AS lot,
+        mml.material_lot_code,
+        hejm.release_qty,
+        hejm.last_update_date creation_date,
+        date_format(hejm.last_update_date, '%Y-%m-%d %H:%i:%s') CREATION_DATE_STR,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        CASE hejm.is_issued
+        WHEN 1 THEN
+        '投料'
+        ELSE
+        '未投料'
+        END y_n,
+        hejm.virtual_flag,
+        mml.primary_uom_qty,
+        hejm.workcell_id
+        FROM
+        hme_eo_job_material hejm
+        LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejm.workcell_id
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hejm.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejm.MATERIAL_ID
+        AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejm.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hejm.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+        join hme_eo_job_sn hejs on hejm.job_id = hejs.job_id
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejs.site_in_by
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+        mt_eo me
+        WHERE
+        hejm.tenant_id = #{tenantId}
+        AND hejm.eo_id = me.EO_ID
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hejm.last_update_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hejm.last_update_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejm.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejm.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hejm.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="cosFunctionReportQueryOfLotTime" resultType="com.ruike.hme.domain.vo.HmeInputRecordVO">
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        me.eo_num,
+        mmw.workcell_code,
+        ia.login_name,
+        ia.real_name,
+        hejs.job_type,
+        me.identification,
+        mm1.material_code,
+        mm1.material_name,
+        mma.attr_value material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        mmla.ATTR_VALUE AS lot,
+        mml.material_lot_code,
+        hejslm.release_qty,
+        hejslm.creation_date,
+        date_format(hejslm.creation_date, '%Y-%m-%d %H:%i:%s') CREATION_DATE_STR,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        '投料' y_n,
+        hejslm.virtual_flag,
+        mml.primary_uom_qty,
+        hejslm.workcell_id
+        FROM
+        hme_eo_job_sn_lot_material hejslm
+        LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hejslm.workcell_id
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hejslm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hejslm.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_attr mma ON mma.MATERIAL_ID = hejslm.MATERIAL_ID
+        AND mma.ATTR_NAME = 'MATERIAL_VERSION' AND mma.TENANT_ID = hejslm.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hejslm.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml on mml.MATERIAL_LOT_ID = hejslm.material_lot_id
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.TENANT_ID = mml.TENANT_ID
+        AND mmla.material_lot_id = mml.material_lot_id
+        AND mmla.ATTR_NAME = 'SUPPLIER_LOT'
+        join hme_eo_job_sn hejs on hejslm.job_id = hejs.job_id
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hejs.site_in_by
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hejs.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id,
+        mt_eo me
+        WHERE
+        hejslm.tenant_id = #{tenantId}
+        AND hejs.eo_id = me.EO_ID
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hejslm.creation_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hejslm.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and hejs.eo_id in
+            <foreach collection="dto.eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and me.identification in
+            <foreach collection="dto.identificationList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hejslm.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hejslm.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="cosFunctionReportQueryOfWo" resultType="com.ruike.hme.domain.vo.HmeInputRecordVO">
+        SELECT
+        mwo.work_order_num,
+        mwo.production_version,
+        mm.material_code wo_material_code,
+        mm.material_name wo_material_name,
+        mwo.qty,
+        '' as eo_num,
+        '' as workcell_code,
+        ia.login_name,
+        ia.real_name,
+        '' as job_type,
+        '' as identification,
+        mm1.material_code,
+        mm1.material_name,
+        hwir.material_version,
+        NULL bom_qty,
+        NULL attrition_chance,
+        mu.uom_code,
+        hwir.lot,
+        mml.material_lot_code,
+        hwir.qty,
+        hwir.creation_date,
+        date_format(hwir.creation_date, '%Y-%m-%d %H:%i:%s') CREATION_DATE_STR,
+        mmsa.attr_value attribute14,
+        mmsa1.attr_value attribute1,
+        CASE hwir.qty
+        WHEN 0 THEN
+        '未投料'
+        ELSE
+        '投料'
+        END y_n,
+        '' as virtual_flag,
+        mml.primary_uom_qty,
+        '' workcell_id
+        FROM
+        hme_wo_input_record hwir
+        LEFT JOIN hzero_platform.iam_user ia ON ia.id = hwir.created_by
+        LEFT JOIN mt_material_site MMS ON MMS.MATERIAL_ID = hwir.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = hwir.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA ON MMSA.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA.ATTR_NAME = 'attribute14' AND mmsa.TENANT_ID = MMS.TENANT_ID
+        LEFT JOIN mt_material_site_attr MMSA1 ON MMSA1.MATERIAL_SITE_ID = MMS.MATERIAL_SITE_ID
+        AND MMSA1.ATTR_NAME = 'attribute1' AND mmsa1.TENANT_ID = MMS.TENANT_ID
+        join mt_material mm1 on mm1.material_id = hwir.material_id
+        LEFT JOIN MT_UOM MU ON MU.UOM_ID = mm1.PRIMARY_UOM_ID
+        join mt_material_lot mml  on mml.MATERIAL_LOT_ID = hwir.material_lot_id
+        join mt_work_order mwo on mwo.WORK_ORDER_ID = hwir.work_order_id
+        LEFT JOIN mt_material mm ON mm.material_id = mwo.material_id
+        WHERE
+        hwir.tenant_id = #{tenantId}
+        <if test="dto.createDateFrom != null and dto.createDateFrom != ''">
+            AND hwir.creation_date >= #{dto.createDateFrom}
+        </if>
+        <if test="dto.createDateTo != null and dto.createDateTo != ''">
+            AND hwir.creation_date <![CDATA[<=]]> #{dto.createDateTo}
+        </if>
+        <if test="dto.workOrderNumIdList != null and dto.workOrderNumIdList.size() > 0">
+            and mwo.work_order_id in
+            <foreach collection="dto.workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.eoIdList != null and dto.eoIdList.size() > 0">
+            and 1 = 2
+        </if>
+        <if test="dto.identificationList != null and dto.identificationList.size() > 0">
+            and 1=2
+        </if>
+        <if test="dto.lotList != null and dto.lotList.size() > 0">
+            and hwir.lot in
+            <foreach collection="dto.lotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and 1 = 2
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and 1 = 2
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hwir.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processId != null and dto.processId != ''">
+            and 1 =2
+        </if>
+    </select>
+
+    <select id="selectProcess" resultType="com.ruike.hme.domain.vo.WorkcellVO">
+        SELECT
+        mmor.ORGANIZATION_ID as PARENT_WORKCELL_ID,
+        mmw1.WORKCELL_NAME
+        FROM
+        mt_mod_organization_rel mmor,
+        mt_mod_workcell mmw1
+        WHERE
+        mmw1.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+        AND mmw1.WORKCELL_type = 'PROCESS'
+        AND mmw1.TENANT_ID = mmor.TENANT_ID
+        AND mmor.ORGANIZATION_ID IN
+        <foreach collection="parentWorkcellIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND mmor.TENANT_ID = #{tenantId}
+    </select>
+
+    <select id="getWorkcellByProcess" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor
+                 left join mt_mod_workcell mmw
+                           on mmw.WORKCELL_ID = mmor.ORGANIZATION_ID
+        where mmor.TENANT_ID = #{tenantId}
+          and mmor.PARENT_ORGANIZATION_ID IN
+        <foreach collection="processIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+          and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+          and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="getEoIdByWorkOrderId" resultType="java.lang.String">
+        SELECT
+            eo.EO_ID
+        FROM
+            mt_eo eo
+        WHERE
+            eo.TENANT_ID = #{tenantId}
+          AND eo.WORK_ORDER_ID IN
+        <foreach collection="workOrderNumIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+</mapper>

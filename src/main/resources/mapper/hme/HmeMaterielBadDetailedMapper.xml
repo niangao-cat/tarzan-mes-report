@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeMaterielBadDetailedMapper">
+
+    <select id="selectListByCondition" resultType="com.ruike.hme.domain.vo.HmeMaterielBadDetailedVO">
+        <bind name="lang" value="@org.hzero.core.helper.LanguageHelper@language()"/>
+        SELECT
+        mmpl.PROD_LINE_CODE,
+        mmplt.PROD_LINE_NAME,
+        mmw_u.WORKCELL_CODE,
+        mmw_u.WORKCELL_NAME,
+        mmw_p.WORKCELL_CODE PROCEDURE_CODE,
+        mmw_p.WORKCELL_NAME PROCEDURE_NAME,
+        mmw.WORKCELL_CODE STATION_CODE,
+        mmw.WORKCELL_NAME STATION_NAME,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        wo.WORK_ORDER_NUM,
+        wo.PRODUCTION_VERSION,
+        mni.INCIDENT_NUMBER,
+        mrc.NC_STATUS NC_INCIDENT_STATUS,
+        mml.MATERIAL_LOT_CODE,
+        mm_com.MATERIAL_CODE ASSEMBLY_CODE,
+        mu.UOM_CODE,
+        mm_com.MATERIAL_NAME ASSEMBLY_NAME,
+        mrc.QTY,
+        mml.LOT,
+        mmla.ATTR_VALUE,
+        mml.FREEZE_FLAG,
+        mng.NC_GROUP_CODE,
+        mng.DESCRIPTION,
+        mnc.NC_CODE,
+        mnc.DESCRIPTION NC_DESCRIPTION,
+        hnra.process_method,
+        mmw_root.WORKCELL_CODE DUTY_CODE,
+        mmw_root.WORKCELL_NAME DUTY_NAME,
+        iu_c.real_name,
+        date_format(mrc.DATE_TIME, '%Y-%m-%d %H:%i:%s') DATE_TIME,
+        mrc.COMMENTS,
+        iu_u.real_name CLOSED_NAME,
+        date_format(mrc.CLOSED_DATE_TIME, '%Y-%m-%d %H:%i:%s') CLOSED_DATE_TIME,
+        mrc_son.COMMENTS CLOSED_COMMENTS,
+        mma.AREA_NAME WORKSHOP_NAME,
+        mml.MATERIAL_LOT_ID,
+        me.WORK_ORDER_ID
+        from
+        mt_nc_record mrc
+        left join hme_nc_record_attr hnra on hnra.parent_record_id = mrc.nc_record_id
+        and hnra.tenant_id = #{tenantId}
+        left join iam_user iu_u on iu_u.id = mrc.CLOSED_USER_ID
+        left join mt_mod_workcell mmw_root on mmw_root.workcell_id = mrc.ROOT_CAUSE_WORKCELL_ID
+        left join mt_mod_organization_rel mmor1 on mmor1.ORGANIZATION_ID = mrc.WORKCELL_ID
+        and mmor1.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor1.TOP_SITE_ID = mrc.SITE_ID
+        left join mt_mod_workcell mmw_p on mmw_p.WORKCELL_ID = mmor1.PARENT_ORGANIZATION_ID
+        left join mt_mod_organization_rel mmor2 on mmor2.ORGANIZATION_ID = mmw_p.WORKCELL_ID
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.TOP_SITE_ID = mrc.SITE_ID
+        left join mt_mod_workcell mmw_u on mmw_u.WORKCELL_ID = mmor2.PARENT_ORGANIZATION_ID
+        left join mt_mod_organization_rel mmor3 on mmor3.ORGANIZATION_ID = mmor2.PARENT_ORGANIZATION_ID
+        and mmor3.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor3.TOP_SITE_ID = mrc.SITE_ID
+        LEFT JOIN mt_mod_production_line mmpl ON mmpl.PROD_LINE_ID = mmor3.PARENT_ORGANIZATION_ID
+        LEFT JOIN mt_mod_production_line_tl mmplt ON mmplt.PROD_LINE_ID = mmpl.PROD_LINE_ID AND mmplt.LANG = #{lang}
+        left join mt_mod_organization_rel mmor4 on mmor4.ORGANIZATION_ID = mmor3.PARENT_ORGANIZATION_ID
+        and mmor4.ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor4.PARENT_ORGANIZATION_TYPE = 'AREA'
+        and mmor4.TOP_SITE_ID = mrc.SITE_ID
+        left join mt_mod_area mma on mma.AREA_ID = mmor4.PARENT_ORGANIZATION_ID,
+        mt_nc_record mrc_son,
+        mt_nc_group mng,
+        mt_nc_incident mni,
+        mt_eo me,
+        mt_work_order wo,
+        mt_mod_workcell mmw,
+        mt_material mm,
+        mt_material_lot mml
+        left join mt_material_lot_attr mmla on mmla.material_lot_id = mml.material_lot_id
+        and mmla.attr_name = 'SUPPLIER_LOT',
+        mt_material mm_com,
+        mt_uom mu,
+        mt_nc_code mnc,
+        iam_user iu_c
+        where
+        1 = 1
+        and mng.NC_GROUP_ID = mrc.NC_CODE_ID
+        and mrc.NC_RECORD_ID = mrc_son.PARENT_NC_RECORD_ID
+        and mnc.NC_CODE_ID = mrc_son.NC_CODE_ID
+        and mrc.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+        and mrc.WORKCELL_ID = mmw.WORKCELL_ID
+        and mni.NC_INCIDENT_ID = mrc.NC_INCIDENT_ID
+        and mng.COMPONENT_REQUIRED = 'Y'
+        and me.EO_ID = mrc.EO_ID
+        and wo.WORK_ORDER_ID = me.WORK_ORDER_ID
+        and wo.MATERIAL_ID = mm.MATERIAL_ID
+        and mrc.COMPONENT_MATERIAL_ID = mm_com.MATERIAL_ID
+        and mm_com.PRIMARY_UOM_ID = mu.uom_id
+        and iu_c.id = mrc.CREATED_BY
+        and ( mrc.PARENT_NC_RECORD_ID = '' OR mrc.PARENT_NC_RECORD_ID IS NULL )
+        and mrc.TENANT_ID = #{tenantId}
+        and mrc.SITE_ID = #{dto.siteId}
+        <if test="dto.dateTimeFrom != null">
+            and mrc.DATE_TIME >= date_format(#{dto.dateTimeFrom}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.dateTimeTo != null">
+            and mrc.DATE_TIME <![CDATA[<=]]> date_format(#{dto.dateTimeTo}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != ''">
+            and mmpl.PROD_LINE_ID = #{dto.prodLineId}
+        </if>
+        <if test="dto.workshopId != null and dto.workshopId != ''">
+            and mmor4.PARENT_ORGANIZATION_ID = #{dto.workshopId}
+        </if>
+        <if test="dto.stationIdList != null and dto.stationIdList.size > 0">
+            and mmw.WORKCELL_ID in
+            <foreach collection="dto.stationIdList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.dutyIdList != null and dto.dutyIdList.size > 0">
+            and mmw_root.WORKCELL_ID in
+            <foreach collection="dto.dutyIdList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size > 0">
+            and mm.MATERIAL_CODE in
+            <foreach collection="dto.materialCodeList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.assemblyCodeList != null and dto.assemblyCodeList.size > 0">
+            and mm_com.MATERIAL_CODE in
+            <foreach collection="dto.assemblyCodeList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size > 0">
+            and wo.WORK_ORDER_NUM in
+            <foreach collection="dto.workOrderNumList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size > 0">
+            and mml.MATERIAL_LOT_CODE in
+            <foreach collection="dto.materialLotCodeList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.ncCodeIdList != null and dto.ncCodeIdList.size > 0">
+            and mnc.NC_CODE_ID in
+            <foreach collection="dto.ncCodeIdList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.ncGroupId != null and dto.ncGroupId != ''">
+            and mng.nc_group_id = #{dto.ncGroupId}
+        </if>
+        <if test="dto.attrValueList != null and dto.attrValueList.size > 0">
+            and mmla.ATTR_VALUE in
+            <foreach collection="dto.attrValueList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.processIdList != null and dto.processIdList.size > 0">
+            and mmw_p.WORKCELL_ID in
+            <foreach collection="dto.processIdList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.lineWorkcellIdList != null and dto.lineWorkcellIdList.size > 0">
+            and mmw_u.WORKCELL_ID in
+            <foreach collection="dto.lineWorkcellIdList" index = "index" item = "item" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.realNameId != null and dto.realNameId != ''">
+            and mrc.CREATED_BY = #{dto.realNameId}
+        </if>
+        <if test="dto.ncIncidentStatusList != null and dto.ncIncidentStatusList.size() > 0 ">
+            and mrc.NC_STATUS IN
+            <foreach collection="dto.ncIncidentStatusList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.closedNameId != null and dto.closedNameId != ''">
+            and mrc.CLOSED_USER_ID = #{dto.closedNameId}
+        </if>
+        <if test="dto.processMethodList != null and dto.processMethodList.size() > 0">
+            and hnra.process_method IN
+            <foreach collection="dto.processMethodList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'Y'.toString()">
+            and mml.freeze_flag = #{dto.freezeFlag}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag == 'N'.toString()">
+            and (
+            mml.freeze_flag = #{dto.freezeFlag}
+            or mml.freeze_flag = ''
+            or mml.freeze_flag = null
+            )
+        </if>
+        <if test="dto.closedDateTimeFrom != null and dto.closedDateTimeFrom != ''">
+            and mrc.CLOSED_DATE_TIME &gt;= #{dto.closedDateTimeFrom}
+        </if>
+        <if test="dto.closedDateTimeTo != null and dto.closedDateTimeTo != ''">
+            and mrc.CLOSED_DATE_TIME &lt;= #{dto.closedDateTimeTo}
+        </if>
+        <if test="dto.incidentNumber != null and dto.incidentNumber != ''">
+            and mni.INCIDENT_NUMBER = #{dto.incidentNumber}
+        </if>
+        order by
+        mrc.CREATION_DATE desc
+    </select>
+
+    <select id="queryReleaseQty" resultType="com.ruike.hme.domain.vo.HmeMaterielBadDetailedVO">
+        SELECT
+        sum( t.release_qty ) release_qty,
+        t.MATERIAL_LOT_ID,
+        t.WORK_ORDER_ID
+        FROM
+        (
+        SELECT
+        jm.release_qty release_qty,
+        mml.MATERIAL_LOT_ID,
+        sn.WORK_ORDER_ID
+        FROM
+        hme_eo_job_material jm,
+        hme_eo_job_sn sn,
+        mt_material_lot mml
+        WHERE
+        jm.tenant_id = #{tenantId}
+        AND jm.material_lot_code = mml.MATERIAL_LOT_CODE
+        AND SN.job_id = jm.job_id
+        AND jm.is_issued = 1
+        AND sn.WORK_ORDER_ID IN
+        <foreach collection="workOrderIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mml.MATERIAL_LOT_ID IN
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        UNION ALL
+        SELECT
+        lm.release_qty release_qty,
+        mml.MATERIAL_LOT_ID,
+        sn.WORK_ORDER_ID
+        FROM
+        hme_eo_job_sn_lot_material lm,
+        hme_eo_job_sn sn,
+        mt_material_lot mml
+        WHERE
+        lm.job_id = sn.job_id
+        AND lm.material_lot_id = mml.MATERIAL_LOT_ID
+        AND lm.release_qty > 0
+        AND sn.WORK_ORDER_ID IN
+        <foreach collection="workOrderIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mml.MATERIAL_LOT_ID IN
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        ) t
+        GROUP BY
+        t.MATERIAL_LOT_ID,
+        t.WORK_ORDER_ID
+    </select>
+
+    <select id="queryReleaseQtyInEoJobMaterial" resultType="com.ruike.hme.domain.vo.HmeMaterielBadDetailedVO">
+        SELECT
+        jm.release_qty,
+        mml.MATERIAL_LOT_ID,
+        sn.WORK_ORDER_ID
+        FROM
+        hme_eo_job_material jm,
+        hme_eo_job_sn sn,
+        mt_material_lot mml
+        WHERE
+        jm.tenant_id = #{tenantId}
+        AND jm.material_lot_code = mml.MATERIAL_LOT_CODE
+        AND SN.job_id = jm.job_id
+        AND jm.is_issued = 1
+        AND (mml.MATERIAL_LOT_ID, sn.WORK_ORDER_ID) in
+        <foreach collection="dtoList" separator="," item="item" open="(" close=")">
+            (#{item.materialLotId} , #{item.workOrderId})
+        </foreach>
+    </select>
+
+    <select id="queryReleaseQtyInEoJobSnLotMaterial" resultType="com.ruike.hme.domain.vo.HmeMaterielBadDetailedVO">
+        SELECT
+        lm.release_qty,
+        lm.MATERIAL_LOT_ID,
+        sn.WORK_ORDER_ID
+        FROM
+        hme_eo_job_sn_lot_material lm,
+        hme_eo_job_sn sn
+        WHERE
+        lm.job_id = sn.job_id
+        AND lm.release_qty > 0
+        AND (lm.MATERIAL_LOT_ID, sn.WORK_ORDER_ID) in
+        <foreach collection="dtoList" separator="," item="item" open="(" close=")">
+            (#{item.materialLotId} , #{item.workOrderId})
+        </foreach>
+        AND lm.tenant_id = #{tenantId}
+    </select>
+</mapper>

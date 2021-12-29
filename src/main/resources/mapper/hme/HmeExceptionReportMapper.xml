@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeExceptionReportMapper">
+
+    <select id="queryExceptionReportList" resultType="com.ruike.hme.domain.vo.HmeExceptionReportVO2" parameterType="com.ruike.hme.domain.vo.HmeExceptionReportVO">
+    SELECT
+    wr.workcell_id AS workcellId,
+    wr.shift_id AS shiftId,
+    wr.material_lot_code AS materialLotCode,
+    wr.exception_remark AS exceptionRemark,
+    wr.exception_status AS exceptionStatus,
+    wr.exception_level AS exceptionLevel,
+    wr.attachment_uuid AS attachmentUuid,
+    wr.created_by AS createdBy,
+    wr.creation_date AS creationDate,
+    wr.responded_by AS respondedBy,
+    wr.respond_time AS respondTime,
+    wr.respond_remark AS respondRemark,
+    wr.closed_by AS closedBy,
+    wr.close_time AS closeTime,
+
+    mw.workcell_name AS workcellName,
+    ws.shift_code AS shiftCode,
+    wr.ATTRIBUTE1 ORGANIZATION_TYPE,
+    wr.ATTRIBUTE2 ORGANIZATION_ID,
+
+    me.identification AS identification,
+    wo.work_order_num AS workOrderNum,
+
+    he.exception_name AS exceptionName,
+    he.exception_type AS exceptionType,
+
+    mm.material_name AS materialName,
+
+    heq.asset_encoding AS assetEncoding,
+
+    mor.ORGANIZATION_ID AS prodLineId,
+    mor.PARENT_ORGANIZATION_ID AS areaId,
+    mor.workshopId
+    FROM
+    hme_exc_wkc_record wr
+    LEFT JOIN mt_mod_workcell mw ON wr.workcell_id = mw.WORKCELL_ID
+    LEFT JOIN mt_wkc_shift ws ON ws.WKC_SHIFT_ID = wr.wkc_shift_id
+    LEFT JOIN mt_eo me ON me.EO_ID = wr.eo_id
+    LEFT JOIN mt_work_order wo ON wo.WORK_ORDER_ID = me.WORK_ORDER_ID
+    LEFT JOIN hme_exception he ON he.exception_id = wr.exception_id
+    LEFT JOIN mt_material mm ON mm.MATERIAL_ID = wr.material_id
+    LEFT JOIN hme_equipment heq ON heq.EQUIPMENT_ID = wr.equipment_id
+    LEFT JOIN (
+    SELECT
+    mor1.ORGANIZATION_ID AS workcellId,
+    mor4.ORGANIZATION_ID,
+    mor5.PARENT_ORGANIZATION_ID,
+    mor5.ORGANIZATION_ID AS workshopId
+    FROM
+    mt_mod_organization_rel mor1
+    LEFT JOIN mt_mod_organization_rel mor2 ON mor2.ORGANIZATION_ID = mor1.PARENT_ORGANIZATION_ID
+    AND mor2.ORGANIZATION_TYPE = "WORKCELL"
+    LEFT JOIN mt_mod_organization_rel mor3 ON mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+    AND mor3.ORGANIZATION_TYPE = "WORKCELL"
+    AND mor3.PARENT_ORGANIZATION_TYPE = "PROD_LINE"
+    LEFT JOIN mt_mod_organization_rel mor4 ON mor4.ORGANIZATION_ID = mor3.PARENT_ORGANIZATION_ID
+    AND mor4.ORGANIZATION_TYPE = "PROD_LINE"
+    AND mor4.PARENT_ORGANIZATION_TYPE = "AREA"
+    LEFT JOIN mt_mod_organization_rel mor5 ON mor5.ORGANIZATION_ID = mor4.PARENT_ORGANIZATION_ID
+    AND mor5.ORGANIZATION_TYPE = "AREA"
+    WHERE mor2.ORGANIZATION_ID is NOT NULL
+    AND mor3.ORGANIZATION_ID is NOT NULL
+    AND mor4.ORGANIZATION_ID is NOT NULL
+    AND mor5.ORGANIZATION_ID is NOT NULL) mor ON mor.workcellId = wr.workcell_id
+    WHERE
+    wr.tenant_id = #{tenantId}
+    <if test="reportVO.startTime != null and reportVO.startTime != ''">
+        AND wr.creation_date >= #{reportVO.startTime}
+    </if>
+    <if test="reportVO.endTime != null and reportVO.endTime != ''">
+        AND wr.creation_date <![CDATA[<=]]> #{reportVO.endTime}
+    </if>
+    <if test="reportVO.shiftId != null and reportVO.shiftId != ''">
+        AND wr.shift_id = #{reportVO.shiftId}
+    </if>
+    <if test="reportVO.shiftCode != null and reportVO.shiftCode != ''">
+        AND ws.SHIFT_CODE LIKE CONCAT("%",#{reportVO.shiftCode},"%")
+    </if>
+    <if test="reportVO.workOrderNum != null and reportVO.workOrderNum != ''">
+        AND wo.WORK_ORDER_NUM = #{reportVO.workOrderNum}
+    </if>
+    <if test="reportVO.identification != null and reportVO.identification != ''">
+        AND me.identification LIKE CONCAT("%",#{reportVO.identification},"%")
+    </if>
+    <if test="reportVO.exceptionType != null and reportVO.exceptionType != ''">
+        AND he.exception_type = #{reportVO.exceptionType}
+    </if>
+    <if test="reportVO.exceptionId != null and reportVO.exceptionId != ''">
+        AND he.exception_id = #{reportVO.exceptionId}
+    </if>
+    <if test="reportVO.exceptionStatus != null and reportVO.exceptionStatus != ''">
+        AND wr.exception_status = #{reportVO.exceptionStatus}
+    </if>
+    <if test="reportVO.productionLineId != null and reportVO.productionLineId != ''">
+        AND ( mor.ORGANIZATION_ID = #{reportVO.productionLineId} OR
+        CASE wr.ATTRIBUTE1 WHEN 'PROD_LINE' THEN wr.ATTRIBUTE2 = #{reportVO.productionLineId} ELSE 1 = 2 END )
+    </if>
+    <if test="reportVO.areaId != null and reportVO.areaId != ''">
+        AND (mor.PARENT_ORGANIZATION_ID = #{reportVO.areaId} OR
+        CASE
+        wr.ATTRIBUTE1
+        WHEN 'PROD_LINE' THEN
+        EXISTS (
+        SELECT
+        1
+        FROM
+        mt_mod_organization_rel mor_s,
+        mt_mod_organization_rel mor_p
+        WHERE
+        mor_s.PARENT_ORGANIZATION_ID = #{reportVO.areaId}
+        AND mor_s.ORGANIZATION_TYPE = 'AREA'
+        AND mor_s.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor_p.PARENT_ORGANIZATION_ID = mor_s.ORGANIZATION_ID
+        AND mor_p.ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor_p.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor_p.ORGANIZATION_ID = wr.ATTRIBUTE2
+        )
+        WHEN 'WORKSHOP' THEN
+        EXISTS ( SELECT 1 FROM mt_mod_organization_rel
+        WHERE PARENT_ORGANIZATION_ID = #{reportVO.areaId}
+        AND ORGANIZATION_ID = wr.ATTRIBUTE2
+        AND ORGANIZATION_TYPE = 'PROD_LINE'
+        AND PARENT_ORGANIZATION_TYPE = 'AREA' )
+        WHEN 'AREA' THEN
+        wr.ATTRIBUTE2 = #{reportVO.areaId} ELSE 1 = 2
+        END )
+    </if>
+    ORDER BY wr.creation_date DESC
+    </select>
+
+    <select id="userInfoBatchGet" resultType="tarzan.common.domain.sys.MtUserInfo">
+        SELECT
+        	id,
+        	login_name,
+        	real_name
+        FROM
+        	iam_user
+        WHERE id IN 
+        <foreach collection="userIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="queryAreaByAreaId" resultType="com.ruike.hme.domain.vo.HmeModAreaVO">
+        SELECT
+        	AREA_ID,
+        	AREA_CODE,
+        	AREA_NAME,
+        	DESCRIPTION
+        FROM
+        	mt_mod_area
+        WHERE
+            AREA_ID = #{areaId}
+    </select>
+
+    <select id="queryAreaByWorkShopId" resultType="com.ruike.hme.domain.vo.HmeModAreaVO">
+        SELECT
+        	 ma.AREA_ID,
+        	 ma.AREA_CODE,
+        	 ma.AREA_NAME,
+        	 ma.DESCRIPTION
+        FROM
+        	mt_mod_organization_rel mor,
+        	mt_mod_area ma
+        WHERE mor.ORGANIZATION_ID = #{workshopId}
+        AND mor.ORGANIZATION_TYPE = 'AREA'
+        AND mor.TENANT_ID = #{tenantId}
+        AND ma.TENANT_ID = mor.TENANT_ID
+        AND ma.AREA_ID = mor.PARENT_ORGANIZATION_ID
+        AND ma.AREA_CATEGORY = 'SYB'
+    </select>
+
+    <select id="queryProdLineById" resultType="com.ruike.hme.domain.vo.HmeModProductionLineVO">
+        SELECT
+        	line.PROD_LINE_ID,
+        	line.PROD_LINE_CODE,
+        	line.PROD_LINE_NAME,
+        	line.DESCRIPTION,
+        	line.PROD_LINE_TYPE
+        FROM
+        	mt_mod_production_line line
+        WHERE line.PROD_LINE_ID = #{prodLineId}
+    </select>
+
+    <select id="queryWorkShopByProdLineId" resultType="com.ruike.hme.domain.vo.HmeModAreaVO">
+        SELECT
+        	 ma.AREA_ID,
+        	 ma.AREA_CODE,
+        	 ma.AREA_NAME,
+        	 ma.DESCRIPTION
+        FROM
+        	mt_mod_organization_rel mor,
+        	mt_mod_area ma
+        WHERE mor.ORGANIZATION_ID = #{prodLineId}
+        AND mor.ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor.PARENT_ORGANIZATION_TYPE = 'AREA'
+        AND mor.TENANT_ID = #{tenantId}
+        AND ma.TENANT_ID = mor.TENANT_ID
+        AND ma.AREA_ID = mor.PARENT_ORGANIZATION_ID
+        AND ma.AREA_CATEGORY = 'CJ'
+    </select>
+
+    <select id="batchQueryAreaByIds" resultType="com.ruike.hme.domain.vo.HmeModAreaVO">
+        SELECT
+        	mma.AREA_ID,
+        	mma.AREA_CODE,
+        	mma.AREA_NAME,
+        	mma.DESCRIPTION
+        FROM
+        	mt_mod_area mma
+        WHERE mma.AREA_ID IN
+        <foreach collection="areaAllIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="prodLineBasicPropertyBatchGet" resultType="com.ruike.hme.domain.vo.HmeModProductionLineVO">
+        SELECT
+        	line.PROD_LINE_ID,
+        	line.PROD_LINE_CODE,
+        	line.PROD_LINE_NAME,
+        	line.DESCRIPTION,
+        	line.PROD_LINE_TYPE
+        FROM
+        	mt_mod_production_line line
+        WHERE line.PROD_LINE_ID IN
+        <foreach collection="proLineIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="queryGenTypeByModuleAndTypeGroup" resultType="com.ruike.hme.domain.vo.HmeGenTypeVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT
+        	mgt.GEN_TYPE_ID,
+        	mgt.MODULE,
+        	mgt.TYPE_GROUP,
+        	mgt.TYPE_CODE,
+        	tl.DESCRIPTION
+        FROM
+        	mt_gen_type mgt,
+        	mt_gen_type_tl tl
+        WHERE mgt.TENANT_ID = #{tenantId}
+        AND mgt.MODULE = #{module}
+        AND mgt.TYPE_GROUP = #{typeGroup}
+        AND tl.GEN_TYPE_ID = mgt.GEN_TYPE_ID
+        AND tl.LANG = #{lang}
+    </select>
+
+    <select id="queryUserInfo" resultType="com.ruike.hme.api.dto.HmeHzeroIamUserDTO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+    SELECT
+    	iu.id,
+    	iu.login_name,
+    	iu.organization_id,
+    	iu.user_type,
+    	httl.tenant_name
+    FROM
+    	hzero_platform.iam_user iu
+    	JOIN hzero_platform.hpfm_tenant ht ON iu.organization_id = ht.tenant_id
+    	LEFT JOIN hzero_platform.hpfm_tenant_tl httl ON ht.tenant_id = httl.tenant_id
+    	AND httl.lang = #{lang}
+    WHERE
+    	iu.login_name = #{loginName}
+    	OR (
+    		iu.email = #{loginName}
+    	AND iu.user_type = 'P')
+    	OR (
+    		iu.phone = #{loginName}
+    	AND iu.user_type = 'P')
+    	AND organization_id = #{tenantId}
+    </select>
+</mapper>

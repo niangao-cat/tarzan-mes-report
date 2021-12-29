@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.wms.infra.mapper.WmsFinishWarehouseMapper">
+
+    <select id="queryFinishSummary" resultType="com.ruike.wms.domain.vo.WmsFinishWarehouseVO">
+        select
+            mmt.site_code,
+            mma2.area_code,
+            mma2.area_name,
+            mmpl.prod_line_name,
+            mm.material_code,
+            mm.material_name,
+            wo.production_version,
+            eo.qty finish_qty,
+            wig.item_group_code,
+            wig.item_group_description,
+            mm_type.attr_value material_category,
+            'F' summary_type
+        from
+            mt_eo eo,
+            mt_work_order wo,
+            mt_mod_production_line mmpl,
+            mt_material mm,
+            mt_material_site mms
+            left join mt_material_basic mmb on mmb.material_site_id = mms.material_site_id
+            left join wms_item_group wig on wig.item_group_code = mmb.item_group
+            left join mt_material_site_attr mm_type on mm_type.material_site_id = mms.material_site_id
+            and mm_type.attr_name = 'attribute13',
+            mt_mod_site mmt,
+            mt_mod_organization_rel mmor1,
+            mt_mod_organization_rel mmor2,
+            mt_mod_area mma1,
+            mt_mod_area mma2
+        where
+            eo.TENANT_ID = #{tenantId}
+        and eo.`status` = 'COMPLETED'
+        and wo.work_order_id = eo.work_order_id
+        and mmpl.prod_line_id = eo.production_line_id
+        and mm.material_id = eo.material_id
+        and mm.material_id = mms.material_id
+        and mms.site_id = mmt.site_id
+        and mms.enable_flag = 'Y'
+        and mmt.site_id = #{dto.siteId}
+        and mmor1.top_site_id = #{dto.siteId}
+        and mmor1.parent_organization_type = 'AREA'
+        and mmor1.organization_type = 'PROD_LINE'
+        and mmor1.organization_id = mmpl.prod_line_id
+        and mmor1.tenant_id = #{tenantId}
+        and mma1.area_id = mmor1.parent_organization_id
+        and mmor2.top_site_id = mmor1.top_site_id
+        and mmor2.parent_organization_type = 'AREA'
+        and mmor2.organization_type = 'AREA'
+        and mmor2.organization_id = mmor1.parent_organization_id
+        and mmor2.tenant_id = #{tenantId}
+        and mma2.area_id = mmor2.parent_organization_id
+        and eo.last_update_date >= #{dto.queryDateFrom}
+        and eo.last_update_date <![CDATA[<=]]> #{dto.queryDateTo}
+        <if test="dto.areaIdList != null and dto.areaIdList.size() > 0">
+            and mma2.area_id IN
+            <foreach collection="dto.areaIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mmpl.prod_line_id IN
+            <foreach collection="dto.prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            and mm.material_code IN
+            <foreach collection="dto.materialCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.productionVersion != null and dto.productionVersion != ''">
+            and wo.production_version LIKE CONCAT(#{dto.productionVersion}, '%')
+        </if>
+        <if test="dto.itemGroupList != null and dto.itemGroupList.size() > 0">
+            and wig.item_group_id IN
+            <foreach collection="dto.itemGroupList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCategory != null and dto.materialCategory != ''">
+            and mm_type.attr_value = #{dto.materialCategory}
+        </if>
+    </select>
+
+    <select id="queryWarehousingSummary" resultType="com.ruike.wms.domain.vo.WmsFinishWarehouseVO">
+        select
+            mmt.site_code,
+            mma2.area_code,
+            mma2.area_name,
+            mmpl.prod_line_name,
+            mm.material_code,
+            mm.material_name,
+            wo.production_version,
+            miad.actual_qty warehousing_Qty,
+            ml_p.LOCATOR_CODE,
+            wig.item_group_code,
+            wig.item_group_description,
+            mm_type.attr_value material_category,
+            'W' summary_type
+        from
+            mt_instruction_doc mid,
+            mt_instruction mi,
+            mt_instruction_actual mia,
+            mt_instruction_actual_detail miad force INDEX(MT_INSTRUCTION_ACTUAL_DTL_N2),
+            mt_material_lot mml,
+            mt_eo eo
+            left join mt_eo_attr mea on mea.eo_id = eo.eo_id and mea.attr_name = 'REWORK_MATERIAL_LOT' and mea.tenant_id = #{tenantId},
+            mt_work_order wo,
+            mt_mod_locator ml,
+            mt_mod_locator ml_p,
+            mt_mod_production_line mmpl,
+            mt_material mm,
+            mt_material_site mms
+            left join mt_material_basic mmb on mmb.material_site_id = mms.material_site_id and mmb.tenant_id = mms.tenant_id
+            left join wms_item_group wig on wig.item_group_code = mmb.item_group and wig.tenant_id = mmb.tenant_id
+            left join mt_material_site_attr mm_type on mm_type.material_site_id = mms.material_site_id
+            and mm_type.attr_name = 'attribute13' and mm_type.tenant_id = mms.tenant_id,
+            mt_mod_site mmt,
+            mt_mod_organization_rel mmor1,
+            mt_mod_organization_rel mmor2,
+            mt_mod_area mma1,
+            mt_mod_area mma2
+        where
+            mid.TENANT_ID = #{tenantId}
+        and mid.INSTRUCTION_DOC_TYPE = 'PRODUCT_RECEIPT'
+        and mid.SITE_ID = #{dto.siteId}
+        and mmt.site_id = mid.SITE_ID
+        and mi.source_doc_id = mid.instruction_doc_id
+        and mi.TENANT_ID = mid.TENANT_ID
+        and mia.instruction_id = mi.instruction_id
+        and mia.TENANT_ID = mi.TENANT_ID
+        and miad.actual_id = mia.actual_id
+        and miad.TENANT_ID = mia.TENANT_ID
+        and mml.MATERIAL_LOT_ID = miad.MATERIAL_LOT_ID
+        and mml.LOCATOR_ID = ml.LOCATOR_ID
+        and ml_p.LOCATOR_ID = ml.PARENT_LOCATOR_ID
+        and eo.IDENTIFICATION = mml.MATERIAL_LOT_CODE
+        and eo.`status` = 'COMPLETED'
+        and eo.TENANT_ID = #{tenantId}
+        and mmpl.prod_line_id = eo.production_line_id
+        and wo.work_order_id = eo.work_order_id
+        and mm.material_id = mml.material_id
+        and mms.material_id = mm.material_id
+        and mms.site_id = #{dto.siteId}
+        and mms.tenant_id = #{tenantId}
+        and mms.enable_flag = 'Y'
+        and mmor1.top_site_id = #{dto.siteId}
+        and mmor1.parent_organization_type = 'AREA'
+        and mmor1.organization_type = 'PROD_LINE'
+        and mmor1.organization_id = mmpl.prod_line_id
+        and mmor1.TENANT_ID = #{tenantId}
+        and mma1.area_id = mmor1.parent_organization_id
+        and mmor2.top_site_id = mmor1.TOP_SITE_ID
+        and mmor2.parent_organization_type = 'AREA'
+        and mmor2.organization_type = 'AREA'
+        and mmor2.organization_id = mmor1.parent_organization_id
+        and mmor2.TENANT_ID = mmor1.TENANT_ID
+        and mma2.area_id = mmor2.parent_organization_id
+        and miad.creation_date >= #{dto.queryDateFrom}
+        and miad.creation_date <![CDATA[<=]]> #{dto.queryDateTo}
+        <if test="dto.areaIdList != null and dto.areaIdList.size() > 0">
+            and mma2.area_id IN
+            <foreach collection="dto.areaIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mmpl.prod_line_id IN
+            <foreach collection="dto.prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            and mm.material_code IN
+            <foreach collection="dto.materialCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.productionVersion != null and dto.productionVersion != ''">
+            and wo.production_version LIKE CONCAT(#{dto.productionVersion}, '%')
+        </if>
+        <if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+            and ml.PARENT_LOCATOR_ID IN
+            <foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.itemGroupList != null and dto.itemGroupList.size() > 0">
+            and wig.item_group_id IN
+            <foreach collection="dto.itemGroupList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCategory != null and dto.materialCategory != ''">
+            and mm_type.attr_value = #{dto.materialCategory}
+        </if>
+        UNION ALL
+        select
+            mmt.site_code,
+            mma2.area_code,
+            mma2.area_name,
+            mmpl.prod_line_name,
+            mm.material_code,
+            mm.material_name,
+            wo.production_version,
+            miad.actual_qty warehousing_Qty,
+            ml_p.LOCATOR_CODE,
+            wig.item_group_code,
+            wig.item_group_description,
+            mm_type.attr_value material_category,
+            'W' summary_type
+        from
+            mt_instruction_doc mid,
+            mt_instruction mi,
+            mt_instruction_actual mia,
+            mt_instruction_actual_detail miad,
+            mt_material_lot mml,
+            mt_eo_attr mea
+            left join mt_eo eo on mea.eo_id = eo.eo_id,
+            mt_work_order wo,
+            mt_mod_locator ml,
+            mt_mod_locator ml_p,
+            mt_mod_production_line mmpl,
+            mt_material mm,
+            mt_material_site mms
+            left join mt_material_basic mmb on mmb.material_site_id = mms.material_site_id and mmb.tenant_id = mms.tenant_id
+            left join wms_item_group wig on wig.item_group_code = mmb.item_group and wig.tenant_id = mmb.tenant_id
+            left join mt_material_site_attr mm_type on mm_type.material_site_id = mms.material_site_id
+            and mm_type.attr_name = 'attribute13' and mm_type.tenant_id = mms.tenant_id,
+            mt_mod_site mmt,
+            mt_mod_organization_rel mmor1,
+            mt_mod_organization_rel mmor2,
+            mt_mod_area mma1,
+            mt_mod_area mma2
+        where
+            mid.TENANT_ID = #{tenantId}
+        and mid.INSTRUCTION_DOC_TYPE = 'PRODUCT_RECEIPT'
+        and mid.SITE_ID = #{dto.siteId}
+        and mmt.site_id = mid.SITE_ID
+        and mi.source_doc_id = mid.instruction_doc_id
+        and mi.TENANT_ID = mid.TENANT_ID
+        and mia.instruction_id = mi.instruction_id
+        and mia.TENANT_ID = mi.TENANT_ID
+        and miad.actual_id = mia.actual_id
+        and miad.TENANT_ID = mia.TENANT_ID
+        and mml.MATERIAL_LOT_ID = miad.MATERIAL_LOT_ID
+        and mml.LOCATOR_ID = ml.LOCATOR_ID
+        and ml_p.LOCATOR_ID = ml.PARENT_LOCATOR_ID
+        and mea.ATTR_VALUE = mml.MATERIAL_LOT_CODE
+        and mea.attr_name = 'REWORK_MATERIAL_LOT'
+        and mea.tenant_id = #{tenantId}
+        and eo.`status` = 'COMPLETED'
+        and eo.TENANT_ID = #{tenantId}
+        and mmpl.prod_line_id = eo.production_line_id
+        and wo.work_order_id = eo.work_order_id
+        and mm.material_id = mml.material_id
+        and mms.material_id = mm.material_id
+        and mms.site_id = #{dto.siteId}
+        and mms.tenant_id = #{tenantId}
+        and mms.enable_flag = 'Y'
+        and mmor1.top_site_id = #{dto.siteId}
+        and mmor1.parent_organization_type = 'AREA'
+        and mmor1.organization_type = 'PROD_LINE'
+        and mmor1.organization_id = mmpl.prod_line_id
+        and mmor1.TENANT_ID = #{tenantId}
+        and mma1.area_id = mmor1.parent_organization_id
+        and mmor2.top_site_id = mmor1.TOP_SITE_ID
+        and mmor2.parent_organization_type = 'AREA'
+        and mmor2.organization_type = 'AREA'
+        and mmor2.organization_id = mmor1.parent_organization_id
+        and mmor2.TENANT_ID = mmor1.TENANT_ID
+        and mma2.area_id = mmor2.parent_organization_id
+        and miad.creation_date >= #{dto.queryDateFrom}
+        and miad.creation_date <![CDATA[<=]]> #{dto.queryDateTo}
+        <if test="dto.areaIdList != null and dto.areaIdList.size() > 0">
+            and mma2.area_id IN
+            <foreach collection="dto.areaIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mmpl.prod_line_id IN
+            <foreach collection="dto.prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            and mm.material_code IN
+            <foreach collection="dto.materialCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.productionVersion != null and dto.productionVersion != ''">
+            and wo.production_version LIKE CONCAT(#{dto.productionVersion}, '%')
+        </if>
+        <if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+            and ml.PARENT_LOCATOR_ID IN
+            <foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.itemGroupList != null and dto.itemGroupList.size() > 0">
+            and wig.item_group_id IN
+            <foreach collection="dto.itemGroupList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCategory != null and dto.materialCategory != ''">
+            and mm_type.attr_value = #{dto.materialCategory}
+        </if>
+    </select>
+
+    <select id="queryActualQty" resultType="com.ruike.wms.domain.vo.WmsFinishWarehouseVO3">
+        select
+        miad.actual_qty,
+        miad.material_lot_id
+        from
+        mt_instruction_actual_detail miad,
+        mt_material_lot mml
+        where
+            miad.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+        and miad.TENANT_ID = #{tenantId}
+        and miad.material_lot_id in
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and miad.creation_date >= #{dto.queryDateFrom}
+        and miad.creation_date <![CDATA[<=]]> #{dto.queryDateTo}
+    </select>
+
+</mapper>

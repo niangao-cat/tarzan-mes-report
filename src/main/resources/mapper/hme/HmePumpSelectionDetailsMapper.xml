@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmePumpSelectionDetailsMapper">
+
+    <select id="pumpSelectionDetailsPageQuery" resultType="com.ruike.hme.domain.vo.HmePumpSelectionDetailsVO">
+        select hpps.pump_pre_selection_id, hpsd.pump_selection_details_id, hpps.comb_material_id, mm.MATERIAL_CODE as comb_material_code,
+               mm.MATERIAL_NAME as comb_material_name, hpps.bom_id, mb.REVISION, hpps.selection_lot, hpps.rule_head_id, hpfrh.rule_code,
+               hpps.sets_num, hpsd.selection_order, hpsd.old_container_id, mc.CONTAINER_CODE as old_container_code,
+               hpsd.new_container_id, mc2.CONTAINER_CODE as new_container_code, hpsd.material_lot_id, mml.MATERIAL_LOT_CODE,
+               hpsd.material_id, mm2.MATERIAL_CODE, mm2.MATERIAL_NAME, mml.LOCATOR_ID, locator.LOCATOR_CODE,
+               locator.PARENT_LOCATOR_ID as warehouse_id, warehouse.LOCATOR_CODE as warehouse_code, mwo.WORK_ORDER_ID, mwo.WORK_ORDER_NUM,
+               hpsd.`status`, hpsd.created_by, hpsd.creation_date, hpps.workcell_id, mmw.WORKCELL_CODE, mmw.WORKCELL_NAME,
+               hpsd.packed_by, hpsd.packed_date, mml.FREEZE_FLAG
+        from hme_pump_pre_selection hpps,
+             hme_pump_selection_details hpsd
+        left join mt_container mc
+        on mc.container_id = hpsd.old_container_id
+        left join mt_container mc2
+        on mc2.CONTAINER_ID = hpsd.new_container_id
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hpsd.material_id,
+             mt_material mm,
+             mt_bom mb,
+             hme_pump_filter_rule_header hpfrh,
+             mt_material_lot mml
+        left join mt_mod_locator locator
+        on locator.LOCATOR_ID = mml.LOCATOR_ID
+        left join mt_mod_locator warehouse
+        on warehouse.LOCATOR_ID = locator.PARENT_LOCATOR_ID
+        left join mt_eo me
+        on me.EO_ID = mml.EO_ID
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = me.WORK_ORDER_ID,
+             mt_mod_workcell mmw
+        where hpps.tenant_id = #{tenantId}
+        and hpsd.pump_pre_selection_id = hpps.pump_pre_selection_id
+        and mm.MATERIAL_ID = hpps.comb_material_id
+        and mb.BOM_ID = hpps.bom_id
+        and hpfrh.rule_head_id = hpps.rule_head_id
+        and mml.MATERIAL_LOT_ID = hpsd.material_lot_id
+        and mmw.WORKCELL_ID = hpps.workcell_id
+        <if test="dto.creationDateFrom != null">
+            and hpsd.creation_date >= DATE_FORMAT(#{dto.creationDateFrom}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.creationDateTo != null">
+            and hpsd.creation_date &lt;= DATE_FORMAT(#{dto.creationDateTo}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            and mml.MATERIAL_LOT_CODE IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            and hpsd.`status` = #{dto.status}
+        </if>
+        <if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+            and locator.PARENT_LOCATOR_ID IN
+            <foreach collection="dto.warehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.locatorIdList != null and dto.locatorIdList.size() > 0">
+            and mml.LOCATOR_ID IN
+            <foreach collection="dto.locatorIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            and mwo.WORK_ORDER_NUM IN
+            <foreach collection="dto.workOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and hpsd.material_id IN
+            <foreach collection="dto.materialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.oldContainerCodeList != null and dto.oldContainerCodeList.size() > 0">
+            and mc.CONTAINER_CODE IN
+            <foreach collection="dto.oldContainerCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.newContainerCodeList != null and dto.newContainerCodeList.size() > 0">
+            and mc2.CONTAINER_CODE IN
+            <foreach collection="dto.newContainerCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.createdBy != null">
+            and hpsd.created_by = #{dto.createdBy}
+        </if>
+        <if test="dto.labCode != null and dto.labCode != ''">
+            and exists (
+                select 1
+                from hme_material_lot_lab_code hmllc
+                where hmllc.material_lot_id = hpsd.material_lot_id
+                and hmllc.lab_code = #{dto.labCode}
+                and hmllc.tenant_id = hpps.tenant_id
+            )
+        </if>
+        <if test="dto.packedDateFrom != null">
+            and hpsd.packed_date >= DATE_FORMAT(#{dto.packedDateFrom}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.packedDateTo != null">
+            and hpsd.packed_date &lt;= DATE_FORMAT(#{dto.packedDateTo}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.packedBy != null">
+            and hpsd.packed_by = #{dto.packedBy}
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != ''">
+            <choose>
+                <when test="dto.freezeFlag == 'Y'.toString() ">
+                    and mml.FREEZE_FLAG = #{dto.freezeFlag}
+                </when>
+                <when test="dto.freezeFlag == 'N'.toString() ">
+                    and (mml.FREEZE_FLAG = #{dto.freezeFlag} or mml.FREEZE_FLAG = '')
+                </when>
+            </choose>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and hpps.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellId != null and dto.workcellId != ''">
+            and hpps.workcell_id = #{dto.workcellId}
+        </if>
+        <if test="dto.ruleCodeList != null and dto.ruleCodeList.size() > 0">
+            and hpfrh.rule_code in
+            <foreach collection="dto.ruleCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.selectionLotList != null and dto.selectionLotList.size() > 0">
+            and hpps.selection_lot in
+            <foreach collection="dto.selectionLotList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.combMaterialIdList != null and dto.combMaterialIdList.size() > 0">
+            and hpps.comb_material_id in
+            <foreach collection="dto.combMaterialIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.revisionList != null and dto.revisionList.size() > 0">
+            and mb.REVISION in
+            <foreach collection="dto.revisionList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.combMaterialLotCodeList != null and dto.combMaterialLotCodeList.size() > 0">
+            and exists(
+                select 1
+                from hme_eo_job_pump_comb hejpc,
+                mt_material_lot mml2
+                where hejpc.material_lot_id = hpsd.material_lot_id
+                and mml2.MATERIAL_LOT_ID = hejpc.comb_material_lot_id
+                and mml2.MATERIAL_LOT_CODE in
+                <foreach collection="dto.combMaterialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+                and hejpc.tenant_id = hpps.tenant_id
+            )
+        </if>
+    </select>
+
+    <select id="combMaterialLotCodeQueryByReleaseWo" resultType="java.lang.String">
+        select me.IDENTIFICATION
+        from mt_work_order mwo,
+             mt_eo me
+        where mwo.WORK_ORDER_NUM in
+        <foreach collection="releaseWorkOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and mwo.TENANT_ID = #{tenantId}
+        and me.WORK_ORDER_ID = mwo.WORK_ORDER_ID
+    </select>
+
+    <select id="pumpMaterialLotLabCodeQuery" resultType="com.ruike.hme.domain.vo.HmePumpSelectionDetailsVO">
+        select hmllc.material_lot_id, GROUP_CONCAT(hmllc.lab_code)as lab_code
+        from hme_material_lot_lab_code hmllc
+        where hmllc.material_lot_id in
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and hmllc.tenant_id = #{tenantId}
+        GROUP BY hmllc.material_lot_id
+    </select>
+
+    <select id="combMaterialLotCodeQuery" resultType="com.ruike.hme.domain.vo.HmePumpSelectionDetailsVO">
+        select hejpc.material_lot_id, hejpc.comb_material_lot_id, mml.MATERIAL_LOT_CODE as comb_material_lot_code
+        from hme_eo_job_pump_comb hejpc,
+             mt_material_lot mml
+        where hejpc.material_lot_id in
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and hejpc.tenant_id = #{tenantId}
+        and mml.MATERIAL_LOT_ID = hejpc.comb_material_lot_id
+        group by hejpc.material_lot_id, hejpc.comb_material_lot_id, mml.MATERIAL_LOT_CODE
+    </select>
+
+    <select id="releaseWoQuery" resultType="com.ruike.hme.domain.vo.HmePumpSelectionDetailsVO">
+        select mml.MATERIAL_LOT_ID as comb_material_lot_id, mwo.WORK_ORDER_ID as release_work_order_id, mwo.WORK_ORDER_NUM as release_work_order_num
+        from mt_material_lot mml,
+             mt_eo me,
+             mt_work_order mwo
+        where mml.MATERIAL_LOT_ID in
+        <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and me.EO_ID = mml.EO_ID
+        and mwo.WORK_ORDER_ID = me.WORK_ORDER_ID
+    </select>
+</mapper>

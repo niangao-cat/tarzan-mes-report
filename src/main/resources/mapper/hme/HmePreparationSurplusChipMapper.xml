@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmePreparationSurplusChipMapper">
+
+    <select id="listQuery" resultType="com.ruike.hme.domain.vo.HmePreparationSurplusChipVO">
+        select t.pre_selection_id, t.old_material_lot_id, hps.pre_selection_lot,
+        mm.MATERIAL_ID as device_MATERIAL_id, mm.MATERIAL_CODE as device_MATERIAL_CODE,
+        mm.MATERIAL_NAME as device_MATERIAL_NAME, hps.ATTRIBUTE1 as pre_rule_code, mml.MATERIAL_LOT_CODE,mml.primary_uom_qty,
+        (
+        select hsd.cos_type
+        from hme_selection_details hsd
+        where hsd.old_material_lot_id = t.old_material_lot_id
+        limit 1
+        ) as cos_type,
+        mm2.MATERIAL_ID, mm2.MATERIAL_CODE, mm2.MATERIAL_NAME,
+        (
+        select COUNT(0)
+        from hme_selection_details hsd
+        where hsd.pre_selection_id = t.pre_selection_id
+        ) as pre_selection_count,
+        (
+        select iu.real_name
+        from hme_selection_details hsd,
+        hzero_platform.iam_user iu
+        where hsd.old_material_lot_id = t.old_material_lot_id
+        and iu.id = hsd.created_by
+        order by hsd.creation_date DESC
+        limit 1
+        ) as user_name,
+        (
+        select DATE_FORMAT(hsd.creation_date,'%Y-%m-%d %H:%i:%S')
+        from hme_selection_details hsd
+        where hsd.old_material_lot_id = t.old_material_lot_id
+        order by hsd.creation_date DESC
+        limit 1
+        ) as preparation_date,
+        mml.LOCATOR_ID, locator.LOCATOR_CODE, locator2.LOCATOR_ID as warehouse_id, locator2.LOCATOR_CODE as WAREHOUSE_CODE
+        from (
+        select hsd.pre_selection_id, hsd.old_material_lot_id
+        from hme_selection_details hsd
+        where hsd.tenant_id = #{tenantId}
+        <if test="dto.preparationDateFrom != null">
+            AND hsd.creation_date >= DATE_FORMAT(#{dto.preparationDateFrom},'%Y-%m-%d %H:%i:%S')
+        </if>
+        <if test="dto.preparationDateTo != null">
+            AND hsd.creation_date &lt;= DATE_FORMAT(#{dto.preparationDateTo},'%Y-%m-%d %H:%i:%S')
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            AND FIND_IN_SET(hsd.cos_type, #{dto.cosType})
+        </if>
+        <if test="dto.userId != null and dto.userId != ''">
+            AND FIND_IN_SET(hsd.created_by, #{dto.userId})
+        </if>
+        group by hsd.pre_selection_id, hsd.old_material_lot_id
+        ) t,
+        hme_pre_selection hps
+        left join mt_material mm on mm.MATERIAL_ID = hps.ATTRIBUTE3,
+        mt_material_lot mml
+        left join mt_mod_locator locator on locator.LOCATOR_ID = mml.LOCATOR_ID
+        left join mt_mod_locator locator2 on locator2.LOCATOR_ID = locator.PARENT_LOCATOR_ID,
+        mt_material mm2
+        where t.pre_selection_id = hps.pre_selection_id
+        and mml.MATERIAL_LOT_ID = t.old_material_lot_id
+        and mm2.MATERIAL_ID = mml.MATERIAL_ID
+        <if test="dto.warehouseId != null and dto.warehouseId != ''">
+            AND FIND_IN_SET(locator2.LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != ''">
+            AND FIND_IN_SET(mml.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.deviceMaterialId != null and dto.deviceMaterialId != ''">
+            AND mm.MATERIAL_ID = #{dto.deviceMaterialId}
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != ''">
+            AND FIND_IN_SET(mml.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            AND FIND_IN_SET(mm2.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preSelectionLot != null and dto.preSelectionLot != ''">
+            AND FIND_IN_SET(hps.pre_selection_lot, #{dto.preSelectionLot})
+        </if>
+        <if test="dto.preRuleCode != null and dto.preRuleCode != ''">
+            AND hps.ATTRIBUTE1 = #{dto.preRuleCode}
+        </if>
+    </select>
+
+    <select id="listQueryNew" resultType="com.ruike.hme.domain.vo.HmePreparationSurplusChipVO">
+        select t.pre_selection_id, t.old_material_lot_id, hps.pre_selection_lot,
+        mm.MATERIAL_ID as device_MATERIAL_id, mm.MATERIAL_CODE as device_MATERIAL_CODE,
+        mm.MATERIAL_NAME as device_MATERIAL_NAME, hps.ATTRIBUTE1 as pre_rule_code, mml.MATERIAL_LOT_CODE,mml.primary_uom_qty,
+        t.cos_type,
+        mm2.MATERIAL_ID, mm2.MATERIAL_CODE, mm2.MATERIAL_NAME,
+        t.created_by,
+        mml.LOCATOR_ID, locator.LOCATOR_CODE, locator2.LOCATOR_ID as warehouse_id, locator2.LOCATOR_CODE as WAREHOUSE_CODE
+        from (
+        select hsd.pre_selection_id, hsd.old_material_lot_id, hsd.cos_type, hsd.created_by
+        from hme_selection_details hsd
+        where hsd.tenant_id = #{tenantId}
+        <if test="dto.preparationDateFrom != null">
+            AND hsd.creation_date >= DATE_FORMAT(#{dto.preparationDateFrom},'%Y-%m-%d %H:%i:%S')
+        </if>
+        <if test="dto.preparationDateTo != null">
+            AND hsd.creation_date &lt;= DATE_FORMAT(#{dto.preparationDateTo},'%Y-%m-%d %H:%i:%S')
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            AND FIND_IN_SET(hsd.cos_type, #{dto.cosType})
+        </if>
+        <if test="dto.userId != null and dto.userId != ''">
+            AND FIND_IN_SET(hsd.created_by, #{dto.userId})
+        </if>
+        group by hsd.pre_selection_id, hsd.old_material_lot_id, hsd.cos_type, hsd.created_by
+        ) t,
+        hme_pre_selection hps
+        left join mt_material mm on mm.MATERIAL_ID = hps.ATTRIBUTE3,
+        mt_material_lot mml
+        left join mt_mod_locator locator on locator.LOCATOR_ID = mml.LOCATOR_ID
+        left join mt_mod_locator locator2 on locator2.LOCATOR_ID = locator.PARENT_LOCATOR_ID,
+        mt_material mm2
+        where t.pre_selection_id = hps.pre_selection_id
+        and mml.MATERIAL_LOT_ID = t.old_material_lot_id
+        and mm2.MATERIAL_ID = mml.MATERIAL_ID
+        <if test="dto.warehouseId != null and dto.warehouseId != ''">
+            AND FIND_IN_SET(locator2.LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != ''">
+            AND FIND_IN_SET(mml.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.deviceMaterialId != null and dto.deviceMaterialId != ''">
+            AND mm.MATERIAL_ID = #{dto.deviceMaterialId}
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != ''">
+            AND FIND_IN_SET(mml.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            AND FIND_IN_SET(mm2.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preSelectionLot != null and dto.preSelectionLot != ''">
+            AND FIND_IN_SET(hps.pre_selection_lot, #{dto.preSelectionLot})
+        </if>
+        <if test="dto.preRuleCode != null and dto.preRuleCode != ''">
+            AND hps.ATTRIBUTE1 = #{dto.preRuleCode}
+        </if>
+    </select>
+
+    <select id="selectionDetailsLoadSequenceQuery" resultType="com.ruike.hme.domain.vo.HmePreparationSurplusChipVO2">
+        select hsd.old_material_lot_id, hsd.load_sequence
+        from hme_selection_details hsd
+        where hsd.old_material_lot_id in
+        <foreach collection="oldMaterialLotIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and hsd.tenant_id = #{tenantId}
+    </select>
+
+    <select id="materialLotLoadSequenceQuery" resultType="com.ruike.hme.domain.vo.HmePreparationSurplusChipVO2">
+        select hmll.material_lot_id as old_material_lot_id, hmll.load_sequence
+        from hme_material_lot_load hmll
+        where hmll.material_lot_id in
+        <foreach collection="oldMaterialLotIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and hmll.tenant_id = #{tenantId}
+    </select>
+
+    <select id="preSelectionCountQuery" resultType="com.ruike.hme.domain.vo.HmePreparationSurplusChipVO">
+        select hsd.pre_selection_id, DATE_FORMAT(hsd.creation_date,'%Y-%m-%d %H:%i:%S') as preparation_date
+        from hme_selection_details hsd
+        where hsd.pre_selection_id in
+        <foreach collection="preSelectionIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and hsd.tenant_id = #{tenantId}
+    </select>
+</mapper>

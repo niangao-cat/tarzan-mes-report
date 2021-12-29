@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.ServiceRepairOrderMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.representation.ServiceRepairOrderRepresentation">
+        select hsr.sn_num,
+        mm.material_code,
+        mm.material_name,
+        mmsa.attr_value as model,
+        hsr.receive_date,
+        hasr.back_type,
+        hasr.work_order_id,
+        hasr.creation_date sap_return_date
+        from hme_service_receive hsr
+        left join hme_after_sales_repair hasr on hasr.service_receive_id = hsr.service_receive_id,
+        mt_material mm,
+        mt_material_site mms
+        left join mt_material_site_attr mmsa on mmsa.material_site_id = mms.material_site_id
+        and mmsa.attr_name = 'attribute5'
+        where hsr.receive_status in ('CONFIRM', 'RECEIVE')
+        and mms.site_id = hsr.site_id
+        and mm.material_id = hsr.material_id
+        and mm.material_id = mms.material_id
+        and mms.tenant_id = hsr.tenant_id
+        and not exists(select 1
+        from hme_service_split_record hssr
+        where hssr.service_receive_id = hsr.service_receive_id
+        and hssr.sn_num = hsr.sn_num
+        and hsr.tenant_id = hssr.tenant_id)
+        and hsr.site_id = #{siteId}
+        and hsr.tenant_id = #{tenantId}
+        <if test="snNum != null">
+            and hsr.sn_num in
+            <foreach collection="snNumList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="materialCode != null">
+            and mm.material_code in
+            <foreach collection="materialCodeList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="model != null">
+            and mmsa.attr_value like concat('%',#{model},'%')
+        </if>
+        <if test="receiveDateStart != null">
+            and hsr.receive_date &gt;= #{receiveDateStart}
+        </if>
+        <if test="receiveDateEnd != null">
+            and hsr.receive_date &lt;= #{receiveDateEnd}
+        </if>
+        <if test="sapReturnDateStart != null">
+            and hasr.creation_date &gt;= #{sapReturnDateStart}
+        </if>
+        <if test="sapReturnDateEnd != null">
+            and hasr.creation_date &lt;= #{sapReturnDateEnd}
+        </if>
+    </select>
+
+    <select id="selectCustomerRepairList" resultType="com.ruike.hme.domain.vo.RepairWorkOrderDateVO">
+        select wio.internal_order repair_work_order_num,
+        wio.internal_order_type,
+        wio.creation_date sap_creation_date,
+        wio.creation_date mes_receive_date
+        from wms_internal_order wio
+        where wio.site_id = #{siteId}
+        and wio.internal_order in
+        <foreach collection="workOrders" item="item" separator="," open="(" close=")">
+            #{item}
+        </foreach>
+        order by wio.creation_date desc
+    </select>
+
+    <select id="selectOwnRepairList" resultType="com.ruike.hme.domain.vo.RepairWorkOrderDateVO">
+        select rel.sn_num,
+        wo.work_order_num repair_work_order_num,
+        wo.work_order_type internal_order_type,
+        mgtl.description internal_order_type_meaning,
+        case when woa.attr_value = '' then null else str_to_date(woa.attr_value,'%Y-%m-%d %H:%i:%s') end
+        sap_creation_date,
+        wo.creation_date mes_receive_date
+        from hme_repair_wo_sn_rel rel,
+        mt_work_order wo
+        left join mt_work_order_attr woa on woa.work_order_id = wo.work_order_id and woa.attr_name = 'attribute12',
+        mt_gen_type mgt,
+        mt_gen_type_tl mgtl
+        where rel.work_order_num = wo.work_order_num
+        and mgt.type_group = 'WO_TYPE'
+        and mgt.type_code = wo.work_order_type
+        and mgt.gen_type_id = mgtl.gen_type_id
+        and mgtl.LANG = 'zh_CN'
+        and rel.tenant_id = wo.tenant_id
+        and wo.`status` in ( 'NEW', 'RELEASED', 'EORELEASED', 'HOLD' )
+        and rel.tenant_id = #{tenantId}
+        and rel.sn_num in
+        <foreach collection="snNums" item="item" separator="," open="(" close=")">
+            #{item}
+        </foreach>
+        order by
+        rel.creation_date desc
+    </select>
+
+</mapper>

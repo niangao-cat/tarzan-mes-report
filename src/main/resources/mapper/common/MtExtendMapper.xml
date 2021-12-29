@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="tarzan.common.infra.mapper.MtExtendMapper">
+    <select id="selectExtend" resultType="tarzan.common.domain.MtExtendVO">
+        SELECT
+            mmwa.ATTR_ID,
+            mmwa.WORKCELL_ID AS key_id,
+            mmwa.ATTR_NAME,
+            mmwa.ATTR_VALUE,
+            mmwa.LANG
+        FROM
+            mt_mod_workcell_attr mmwa
+        WHERE
+              mmwa.TENANT_ID = #{tenantId}
+          AND mmwa.ATTR_NAME IN
+        <foreach collection="attrNameList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+          AND mmwa.WORKCELL_ID IN
+        <foreach collection="keyIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+</mapper>

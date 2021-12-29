@@ -1,0 +1,354 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeServiceSplitRk05ReportMapper">
+    <select id="selectSplitRecord" resultType="com.ruike.hme.domain.vo.HmeServiceSplitRk05ReportVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT
+        hssr.split_record_id,
+        hssr.work_order_num,
+        hssr.sn_num,
+        mml.material_lot_code,
+        mm.material_code,
+        mm.material_name,
+        date_format( hssr.split_time, '%Y-%m-%d %H:%i:%S' ) AS split_time,
+        hssr.split_status,
+        ml.locator_code,
+        ml.locator_name,
+        ml_p.locator_code AS warehouse_code,
+        ml_p.locator_name AS warehouse_name,
+        wig.item_group_code,
+        wig.item_group_description,
+        mml.ENABLE_FLAG,
+        ( CASE mml_mf.ATTR_VALUE = '' or mml_mf.ATTR_VALUE is null WHEN true THEN 'N' ELSE mml_mf.ATTR_VALUE END ) AS mf_flag,
+        wo.STATUS AS work_order_status,
+        ( CASE wa.RELEASED_QTY > 0 WHEN true THEN 'Y' ELSE 'N' END )  AS is_create_sn,
+        DATE_FORMAT(wa.ACTUAL_END_DATE, '%Y-%m-%d %H:%i:%s') AS ACTUAL_END_DATE,
+        attr.ATTR_VALUE AS material_lot_status
+    FROM
+        hme_service_split_record hssr
+        LEFT JOIN mt_work_order wo ON wo.work_order_num = hssr.work_order_num
+        AND wo.TENANT_ID = hssr.TENANT_ID
+        LEFT JOIN mt_gen_status mgs ON mgs.status_group = 'WO_STATUS'
+        AND mgs.status_code = wo.STATUS
+        AND mgs.TENANT_ID = wo.TENANT_ID
+        LEFT JOIN mt_gen_status_tl mgst ON mgs.gen_status_id = mgst.gen_status_id
+        AND mgst.lang = #{lang}
+        LEFT JOIN mt_work_order_actual wa ON wa.work_order_id = wo.work_order_id
+        AND wa.TENANT_ID = wo.TENANT_ID,
+        mt_material_lot mml
+        LEFT JOIN mt_material_lot_attr attr ON mml.tenant_id = attr.tenant_id
+        AND mml.MATERIAL_LOT_ID = attr.MATERIAL_LOT_ID
+        AND attr.ATTR_NAME = 'STATUS'
+        LEFT JOIN mt_material_lot_attr mml_mf ON mml_mf.TENANT_ID = mml.TENANT_ID
+        AND mml_mf.material_lot_id = mml.material_lot_id
+        AND mml_mf.attr_name = 'MF_FLAG',
+        mt_material mm,
+        mt_material_site mms,
+        mt_material_basic mmb
+        LEFT JOIN wms_item_group wig ON wig.item_group_code = mmb.item_group
+        AND wig.TENANT_ID = mmb.TENANT_ID,
+        mt_mod_locator ml,
+        mt_mod_locator ml_p
+    WHERE
+        hssr.material_lot_id = mml.material_lot_id
+        AND mm.material_id = mml.material_id
+        AND mms.material_id = mm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = mm.TENANT_ID
+        AND mmb.material_site_id = mms.material_site_id
+        AND ml.locator_id = mml.locator_id
+        AND ml.parent_locator_id = ml_p.locator_id
+        AND hssr.split_record_id != hssr.top_split_record_id
+        AND hssr.tenant_id = #{tenantId}
+        <if test="dto.snNumList != null and dto.snNumList.size() > 0">
+            AND hssr.sn_num IN
+            <foreach collection="dto.snNumList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialtLotStatusList != null and dto.materialtLotStatusList.size() > 0">
+            AND attr.ATTR_VALUE IN
+            <foreach collection="dto.materialtLotStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            AND mm.material_code IN
+            <foreach collection="dto.materialCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.splitStatusList != null and dto.splitStatusList.size() > 0">
+            AND hssr.split_status IN
+            <foreach collection="dto.splitStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.warehouseCodeList != null and dto.warehouseCodeList.size() > 0">
+            AND ml_p.locator_code IN
+            <foreach collection="dto.warehouseCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.itemGroupDescription !=null and dto.itemGroupDescription !=''">
+            <bind name="itemGroupDescriptionLike" value="'%'+ dto.itemGroupDescription +'%'"/>
+            AND wig.item_group_description LIKE #{itemGroupDescriptionLike}
+        </if>
+        <if test="dto.workOrderStatusList != null and dto.workOrderStatusList.size() > 0">
+            AND wo.STATUS IN
+            <foreach collection="dto.workOrderStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.isCreateSn !=null and dto.isCreateSn !=''">
+            AND ( CASE wa.RELEASED_QTY > 0 WHEN true THEN 'Y' ELSE 'N' END )  = #{dto.isCreateSn}
+        </if>
+        <if test="dto.materialLotEnableFlag !=null and dto.materialLotEnableFlag !=''">
+            AND mml.ENABLE_FLAG = #{dto.materialLotEnableFlag}
+        </if>
+        <if test="dto.mfFlag !=null and dto.mfFlag !=''">
+            AND ( CASE mml_mf.ATTR_VALUE = '' or mml_mf.ATTR_VALUE is null WHEN true THEN 'N' ELSE mml_mf.ATTR_VALUE END ) = #{dto.mfFlag}
+        </if>
+        <if test="dto.workOrderDateFrom !=null and dto.workOrderDateFrom !=''">
+            AND wa.ACTUAL_END_DATE &gt;= STR_TO_DATE(#{dto.workOrderDateFrom}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workOrderDateTo !=null and dto.workOrderDateTo !=''">
+            AND wa.ACTUAL_END_DATE &lt;= STR_TO_DATE(#{dto.workOrderDateTo}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.splitDateFrom !=null and dto.splitDateFrom !=''">
+            AND hssr.split_time &gt;= STR_TO_DATE(#{dto.splitDateFrom}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.splitDateTo !=null and dto.splitDateTo !=''">
+            AND hssr.split_time &lt;= STR_TO_DATE(#{dto.splitDateTo}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+            AND EXISTS (
+            SELECT
+            1
+            FROM
+            mt_mod_workcell mmw,
+            mt_eo_step_wip sw,
+            mt_eo_step_actual sa,
+            mt_eo_router_actual ra,
+            mt_eo eo,
+            mt_eo_attr ea,
+            mt_material_lot mml,
+            hme_service_split_record hssrt
+            WHERE
+            mmw.WORKCELL_ID = sw.WORKCELL_ID
+            AND mmw.WORKCELL_CODE IN
+            <foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+            AND sw.TENANT_ID = sa.TENANT_ID
+            AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+            AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+            AND ra.EO_ID = eo.EO_ID
+            AND eo.STATUS = 'WORKING'
+            AND ea.TENANT_ID = hssr.tenant_id
+            AND eo.EO_ID = ea.EO_ID
+            AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+            AND ea.ATTR_VALUE = mml.MATERIAL_LOT_CODE
+            AND mml.MATERIAL_LOT_ID = hssrt.material_lot_id
+            AND hssrt.split_record_id = hssr.split_record_id
+            )
+        </if>
+    </select>
+
+    <select id="selectSplitWorkcell" resultType="com.ruike.hme.domain.vo.HmeServiceSplitRk05ReportVO">
+        SELECT
+        hssr.split_record_id,
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME
+        FROM
+        mt_mod_workcell mmw,
+        mt_eo_step_wip sw,
+        mt_eo_step_actual sa,
+        mt_eo_router_actual ra,
+        mt_eo eo,
+        mt_eo_attr ea,
+        mt_material_lot mml,
+        hme_service_split_record hssr
+        WHERE
+        mmw.WORKCELL_ID = sw.WORKCELL_ID
+        <if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+            AND mmw.WORKCELL_CODE IN
+            <foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        AND sw.TENANT_ID = sa.TENANT_ID
+        AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+        AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+        AND ra.EO_ID = eo.EO_ID
+        AND eo.STATUS = 'WORKING'
+        AND ea.TENANT_ID = hssr.tenant_id
+        AND eo.EO_ID = ea.EO_ID
+        AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+        AND ea.ATTR_VALUE = mml.MATERIAL_LOT_CODE
+        AND mml.MATERIAL_LOT_ID = hssr.material_lot_id
+        AND hssr.split_record_id IN
+        <foreach collection="splitRecordIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="selectExportSplitRecord" resultType="com.ruike.hme.domain.vo.HmeServiceSplitRk05ReportVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        SELECT
+        hssr.split_record_id,
+        hssr.work_order_num,
+        hssr.sn_num,
+        mml.material_lot_code,
+        mm.material_code,
+        mm.material_name,
+        date_format( hssr.split_time, '%Y-%m-%d %H:%i:%S' ) AS split_time,
+        hssr.split_status,
+        ml.locator_code,
+        ml.locator_name,
+        ml_p.locator_code AS warehouse_code,
+        ml_p.locator_name AS warehouse_name,
+        wig.item_group_code,
+        wig.item_group_description,
+        wkc.WORKCELL_CODE,
+        wkc.WORKCELL_NAME,
+        mml.ENABLE_FLAG,
+        ( CASE mml_mf.ATTR_VALUE = '' or mml_mf.ATTR_VALUE is null WHEN true THEN 'N' ELSE mml_mf.ATTR_VALUE END ) AS mf_flag,
+        wo.STATUS AS work_order_status,
+        ( CASE wa.RELEASED_QTY > 0 WHEN true THEN 'Y' ELSE 'N' END )  AS is_create_sn,
+        DATE_FORMAT(wa.ACTUAL_END_DATE, '%Y-%m-%d %H:%i:%s') AS ACTUAL_END_DATE,
+        attr.ATTR_VALUE AS material_lot_status
+        FROM
+        hme_service_split_record hssr
+        LEFT JOIN mt_work_order wo ON wo.work_order_num = hssr.work_order_num
+        AND wo.TENANT_ID = hssr.TENANT_ID
+        LEFT JOIN mt_gen_status mgs ON mgs.status_group = 'WO_STATUS'
+        AND mgs.status_code = wo.STATUS
+        AND mgs.TENANT_ID = wo.TENANT_ID
+        LEFT JOIN mt_gen_status_tl mgst ON mgs.gen_status_id = mgst.gen_status_id
+        AND mgst.lang = #{lang}
+        LEFT JOIN mt_work_order_actual wa ON wa.work_order_id = wo.work_order_id
+        AND wa.TENANT_ID = wo.TENANT_ID,
+        mt_material_lot mml
+        LEFT JOIN mt_material_lot_attr attr ON mml.tenant_id = attr.tenant_id
+        AND mml.MATERIAL_LOT_ID = attr.MATERIAL_LOT_ID
+        AND attr.ATTR_NAME = 'STATUS'
+        LEFT JOIN mt_material_lot_attr mml_mf ON mml_mf.TENANT_ID = mml.TENANT_ID
+        AND mml_mf.material_lot_id = mml.material_lot_id
+        AND mml_mf.attr_name = 'MF_FLAG'
+        LEFT JOIN (
+        SELECT
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME,
+        ea.ATTR_VALUE
+        FROM
+        mt_mod_workcell mmw,
+        mt_eo_step_wip sw,
+        mt_eo_step_actual sa,
+        mt_eo_router_actual ra,
+        mt_eo eo,
+        mt_eo_attr ea
+        WHERE
+        mmw.WORKCELL_ID = sw.WORKCELL_ID
+        <if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+            AND mmw.WORKCELL_CODE IN
+            <foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        AND sw.TENANT_ID = sa.TENANT_ID
+        AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+        AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+        AND ra.EO_ID = eo.EO_ID
+        AND eo.STATUS = 'WORKING'
+        AND ea.TENANT_ID = #{tenantId}
+        AND eo.EO_ID = ea.EO_ID
+        AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+        ) wkc ON wkc.ATTR_VALUE = mml.MATERIAL_LOT_CODE,
+        mt_material mm,
+        mt_material_site mms,
+        mt_material_basic mmb
+        LEFT JOIN wms_item_group wig ON wig.item_group_code = mmb.item_group
+        AND wig.TENANT_ID = mmb.TENANT_ID,
+        mt_mod_locator ml,
+        mt_mod_locator ml_p
+        WHERE
+        hssr.material_lot_id = mml.material_lot_id
+        AND mm.material_id = mml.material_id
+        AND mms.material_id = mm.material_id
+        AND mms.site_id = #{dto.siteId}
+        AND mms.TENANT_ID = mm.TENANT_ID
+        AND mmb.material_site_id = mms.material_site_id
+        AND ml.locator_id = mml.locator_id
+        AND ml.parent_locator_id = ml_p.locator_id
+        AND hssr.split_record_id != hssr.top_split_record_id
+        AND hssr.tenant_id = #{tenantId}
+        <if test="dto.snNumList != null and dto.snNumList.size() > 0">
+            AND hssr.sn_num IN
+            <foreach collection="dto.snNumList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialtLotStatusList != null and dto.materialtLotStatusList.size() > 0">
+            AND attr.ATTR_VALUE IN
+            <foreach collection="dto.materialtLotStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            AND mm.material_code IN
+            <foreach collection="dto.materialCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.splitStatusList != null and dto.splitStatusList.size() > 0">
+            AND hssr.split_status IN
+            <foreach collection="dto.splitStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.warehouseCodeList != null and dto.warehouseCodeList.size() > 0">
+            AND ml_p.locator_code IN
+            <foreach collection="dto.warehouseCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.itemGroupDescription !=null and dto.itemGroupDescription !=''">
+            <bind name="itemGroupDescriptionLike" value="'%'+ dto.itemGroupDescription +'%'"/>
+            AND wig.item_group_description LIKE #{itemGroupDescriptionLike}
+        </if>
+        <if test="dto.isCreateSn !=null and dto.isCreateSn !=''">
+            AND ( CASE wa.RELEASED_QTY > 0 WHEN true THEN 'Y' ELSE 'N' END ) = #{dto.isCreateSn}
+        </if>
+        <if test="dto.materialLotEnableFlag !=null and dto.materialLotEnableFlag !=''">
+            AND mml.ENABLE_FLAG = #{dto.materialLotEnableFlag}
+        </if>
+        <if test="dto.mfFlag !=null and dto.mfFlag !=''">
+            AND ( CASE mml_mf.ATTR_VALUE = '' or mml_mf.ATTR_VALUE is null WHEN true THEN 'N' ELSE mml_mf.ATTR_VALUE END ) = #{dto.mfFlag}
+        </if>
+        <if test="dto.workOrderDateFrom !=null and dto.workOrderDateFrom !=''">
+            AND wa.ACTUAL_END_DATE &gt;= STR_TO_DATE(#{dto.workOrderDateFrom}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workOrderDateTo !=null and dto.workOrderDateTo !=''">
+            AND wa.ACTUAL_END_DATE &lt;= STR_TO_DATE(#{dto.workOrderDateTo}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.splitDateFrom !=null and dto.splitDateFrom !=''">
+            AND hssr.split_time &gt;= STR_TO_DATE(#{dto.splitDateFrom}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.splitDateTo !=null and dto.splitDateTo !=''">
+            AND hssr.split_time &lt;= STR_TO_DATE(#{dto.splitDateTo}, '%Y-%m-%d %H:%i:%s')
+        </if>
+    </select>
+</mapper>

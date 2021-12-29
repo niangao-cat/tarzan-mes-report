@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="tarzan.common.infra.mapper.SiteMapper">
+
+    <select id="selectSiteByUser" resultType="java.lang.String">
+        select muo.organization_id
+        from mt_user_organization muo
+        where muo.organization_type = 'SITE'
+          and muo.user_id = #{userId}
+          and muo.enable_flag = 'Y'
+          and muo.default_organization_flag = 'Y'
+        limit 1
+    </select>
+
+</mapper>

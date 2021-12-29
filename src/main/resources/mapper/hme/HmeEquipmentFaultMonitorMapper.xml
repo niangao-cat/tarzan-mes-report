@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeEquipmentFaultMonitorMapper">
+
+    <select id="pageList" resultType="com.ruike.hme.domain.vo.HmeEquipmentFaultMonitorVO">
+        SELECT
+        heq.ASSET_NAME,
+        heq.ASSET_ENCODING,
+        heq.MODEL,
+        heq.EQUIPMENT_BODY_NUM,
+        mma.AREA_NAME,
+        heq.LOCATION,
+        heq.USER,
+        he.exception_name,
+        hewr.creation_date,
+        hewr.close_time,
+        hewr.respond_remark
+        FROM
+        hme_exception he,
+        hme_exc_wkc_record hewr,
+        hme_equipment heq,
+        mt_mod_area mma
+        WHERE
+        he.tenant_id = #{tenantId}
+        AND he.exception_id = hewr.exception_id
+        AND he.exception_type = 'EQUIPMENT'
+        AND hewr.equipment_id = heq.EQUIPMENT_ID
+        AND heq.BUSINESS_ID = mma.AREA_ID
+        <if test="dto.equipmentId != null ">
+            AND heq.equipment_id IN
+            <foreach collection="dto.equipmentIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.location != null and dto.location!='' ">
+            AND heq.LOCATION LIKE CONCAT('%',#{dto.location} ,'%')
+        </if>
+        <if test="dto.equipmentCategory != null and dto.equipmentCategory!='' ">
+            AND heq.EQUIPMENT_CATEGORY = #{dto.equipmentCategory}
+        </if>
+        <if test="dto.exceptionId != null and dto.exceptionId!='' ">
+            AND he.exception_id = #{dto.exceptionId}
+        </if>
+        <if test="dto.areaId != null and dto.areaId!='' ">
+            AND heq.business_id = #{dto.areaId}
+        </if>
+        <if test="dto.creationStartTime != null and dto.creationStartTime!='' ">
+            AND hewr.creation_date &gt;= #{dto.creationStartTime}
+        </if>
+        <if test="dto.creationEndTime != null and dto.creationEndTime!='' ">
+            AND hewr.creation_date &lt;= #{dto.creationEndTime}
+        </if>
+        <if test="dto.equipmentExceptionStatus != null and dto.equipmentExceptionStatus != ''">
+            <choose>
+                <when test='dto.equipmentExceptionStatus == "Y"'>
+                    AND (hewr.close_time is NULL OR hewr.close_time = '')
+                </when>
+                <otherwise>
+                    AND hewr.close_time is NOT NULL
+                </otherwise>
+            </choose>
+        </if>
+    </select>
+</mapper>

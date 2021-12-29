@@ -1,0 +1,369 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosWorkcellSummaryMapper">
+
+    <select id="selectListByCondition"
+            resultType="com.ruike.hme.api.dto.representation.HmeCosWorkcellSummaryRepresentation">
+        select cor.work_order_id
+        ,mwo.qty wo_qty
+        ,mwo.work_order_num
+        ,cor.wafer
+        ,cor.cos_type
+        ,mm.material_code
+        ,mm.material_name
+        ,ifnull(cor.cos_num,0) as cos_num
+        ,ejs.job_id
+        ,ifnull(ejs.sn_qty,0) as sn_qty
+        ,ejs.created_by operator_id
+        ,ejs.workcell_id
+        ,date_format(ejs.creation_date,'%Y-%m-%d') as creation_date
+        ,ejs.job_type
+        ,cor.operation_id
+        ,mo.operation_name operation_code
+        ,mo.description as operation_name
+        ,wkc.workcell_code
+        ,wkc.workcell_name
+        ,mpl.prod_line_code
+        ,mwo.production_version
+        ,woa.attr_value production_version_description
+        ,wkc_prc.workcell_name workcell_process_name
+        ,wkc_line.workcell_name workcell_line_name,
+        ejs.source_job_id
+        from hme_cos_operation_record cor
+        ,mt_work_order mwo
+        left join mt_work_order_attr woa on woa.work_order_id = mwo.work_order_id and woa.attr_name = 'ATTRIBUTE11'
+        ,hme_eo_job_sn ejs
+        ,mt_material mm
+        ,mt_operation mo
+        ,mt_mod_workcell wkc
+        ,mt_mod_organization_rel mor_sp
+        left join mt_mod_workcell wkc_prc on wkc_prc.workcell_id = mor_sp.parent_organization_id
+        left join mt_mod_organization_rel mor_pl on mor_pl.organization_id = mor_sp.parent_organization_id
+        and mor_pl.organization_type = 'WORKCELL' and mor_pl.top_site_id = mor_sp.top_site_id
+        left join mt_mod_workcell wkc_line on wkc_line.workcell_id = mor_pl.parent_organization_id
+        ,mt_mod_production_line mpl
+        where mwo.work_order_id = cor.work_order_id
+        <if test="dto.creationDateFrom != null and dto.creationDateTo != null " >
+            and ejs.creation_date between #{dto.creationDateFrom} and #{dto.creationDateTo}
+        </if>
+        and cor.operation_record_id = ejs.source_job_id
+        and ejs.sn_material_id = mm.material_id
+        and mo.operation_id = cor.operation_id
+        and ejs.workcell_id = wkc.workcell_id
+        and mwo.production_line_id = mpl.prod_line_id
+        and mor_sp.organization_id = wkc.workcell_id
+        and mor_sp.organization_type = 'WORKCELL'
+        and mor_sp.top_site_id = mwo.site_id
+        <if test="dto.waferList != null and dto.waferList.size() > 0">
+            and cor.wafer in
+            <foreach collection="dto.waferList" item="wafer" separator="," open="(" close=")">
+                #{wafer}
+            </foreach>
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            and cor.cos_type = #{dto.cosType}
+        </if>
+        <if test="dto.operatorId != null and dto.operatorId != ''">
+            and cor.created_by = #{dto.operatorId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and ejs.sn_material_id in
+            <foreach collection="dto.materialIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.jobTypeList != null and dto.jobTypeList.size() > 0">
+            and ejs.job_type in
+            <foreach collection="dto.jobTypeList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.stationIdList != null and dto.stationIdList.size() > 0">
+            and wkc.workcell_id in
+            <foreach collection="dto.stationIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.processIdList != null and dto.processIdList.size() > 0">
+            and wkc_prc.workcell_id in
+            <foreach collection="dto.processIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.lineIdList != null and dto.lineIdList.size() > 0">
+            and wkc_line.workcell_id in
+            <foreach collection="dto.lineIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mpl.prod_line_id in
+            <foreach collection="dto.prodLineIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            and mwo.work_order_num in
+            <foreach collection="dto.workOrderNumList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        and cor.tenant_id = #{tenantId}
+    </select>
+
+    <select id="selectListByConditionNew"
+            resultType="com.ruike.hme.api.dto.representation.HmeCosWorkcellSummaryRepresentation">
+        select cor.work_order_id
+                ,mwo.qty wo_qty
+                ,mwo.work_order_num
+                ,cor.wafer
+                ,cor.cos_type
+                ,mm.material_code
+                ,mm.material_name
+                ,ifnull(cor.cos_num,0) as cos_num
+                ,ejs.job_id
+                ,ifnull(ejs.sn_qty,0) as sn_qty
+                ,ejs.created_by operator_id
+                ,ejs.workcell_id
+                ,date_format(ejs.creation_date,'%Y-%m-%d') as creation_date
+                ,ejs.job_type
+                ,cor.operation_id
+                ,mo.operation_name operation_code
+                ,mo.description as operation_name
+                ,wkc.workcell_code
+                ,wkc.workcell_name
+                ,mpl.prod_line_code
+                ,mwo.production_version
+                ,woa.attr_value production_version_description
+                ,wkc_prc.workcell_name workcell_process_name
+                ,wkc_line.workcell_name workcell_line_name,
+                ejs.source_job_id
+        from hme_eo_job_sn ejs,
+             hme_cos_operation_record cor,
+             mt_work_order mwo
+             left join mt_work_order_attr woa on woa.work_order_id = mwo.work_order_id and woa.attr_name = 'ATTRIBUTE11',
+             mt_material mm,
+             mt_operation mo,
+             mt_mod_workcell wkc,
+             mt_mod_organization_rel mor_sp
+             left join mt_mod_workcell wkc_prc on wkc_prc.workcell_id = mor_sp.parent_organization_id
+             left join mt_mod_organization_rel mor_pl on mor_pl.organization_id = mor_sp.parent_organization_id
+             and mor_pl.organization_type = 'WORKCELL' and mor_pl.top_site_id = mor_sp.top_site_id
+             left join mt_mod_workcell wkc_line on wkc_line.workcell_id = mor_pl.parent_organization_id
+             ,mt_mod_production_line mpl
+        where ejs.tenant_id = #{tenantId}
+        <if test="dto.jobTypeList != null and dto.jobTypeList.size() > 0">
+            and ejs.job_type in
+            <foreach collection="dto.jobTypeList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.creationDateFrom != null and dto.creationDateTo != null " >
+            and ejs.creation_date between #{dto.creationDateFrom} and #{dto.creationDateTo}
+        </if>
+        and cor.operation_record_id = ejs.source_job_id
+        and mwo.work_order_id = cor.work_order_id
+        and mm.material_id = ejs.sn_material_id
+        and mo.operation_id = cor.operation_id
+        and wkc.workcell_id = ejs.workcell_id
+        and mor_sp.organization_id = wkc.workcell_id
+        and mor_sp.organization_type = 'WORKCELL'
+        and mor_sp.top_site_id = mwo.site_id
+        and mpl.prod_line_id = mwo.production_line_id
+        <if test="dto.waferList != null and dto.waferList.size() > 0">
+            and cor.wafer in
+            <foreach collection="dto.waferList" item="wafer" separator="," open="(" close=")">
+                #{wafer}
+            </foreach>
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            and cor.cos_type = #{dto.cosType}
+        </if>
+        <if test="dto.operatorId != null and dto.operatorId != ''">
+            and ejs.created_by = #{dto.operatorId}
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            and ejs.sn_material_id in
+            <foreach collection="dto.materialIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.stationIdList != null and dto.stationIdList.size() > 0">
+            and ejs.workcell_id in
+            <foreach collection="dto.stationIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.processIdList != null and dto.processIdList.size() > 0">
+            and wkc_prc.workcell_id in
+            <foreach collection="dto.processIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.lineIdList != null and dto.lineIdList.size() > 0">
+            and wkc_line.workcell_id in
+            <foreach collection="dto.lineIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mpl.prod_line_id in
+            <foreach collection="dto.prodLineIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            and mwo.work_order_num in
+            <foreach collection="dto.workOrderNumList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="selectEquipmentList" resultType="com.ruike.hme.domain.vo.JobEquipmentVO">
+        SELECT
+        heje.job_id,
+        group_concat( DISTINCT he.asset_encoding ORDER BY he.asset_encoding SEPARATOR '/' ) AS asset_encoding
+        FROM
+        hme_eo_job_equipment heje,
+        hme_equipment he
+        WHERE
+        heje.equipment_id = he.EQUIPMENT_ID
+        AND heje.tenant_id = #{tenantId}
+        AND heje.job_id IN
+        <foreach collection="jobIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        GROUP BY
+        heje.job_id
+    </select>
+
+    <select id="selectEquipmentList2" resultType="com.ruike.hme.domain.vo.JobEquipmentVO">
+        SELECT
+        heje.job_id,
+        he.asset_encoding
+        FROM
+        hme_eo_job_equipment heje,
+        hme_equipment he
+        WHERE heje.job_id IN
+        <foreach collection="sourceJobIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND heje.equipment_id = he.EQUIPMENT_ID
+    </select>
+
+    <select id="selectCosNumList" resultType="com.ruike.hme.domain.valueobject.HmeCosOperationRecord">
+        SELECT
+        t.wafer,
+        t.work_order_id,
+        sum( t.cos_num ) AS cos_num
+        FROM
+        hme_cos_operation_record t,
+        mt_mod_workcell mmw1,
+        hzero_platform.hpfm_lov_value hlv1
+        WHERE
+        t.workcell_id = mmw1.WORKCELL_ID
+        AND t.tenant_id = #{tenantId}
+        AND t.work_order_id IN
+        <foreach collection="workOrderList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND t.wafer IN
+        <foreach collection="waferList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND mmw1.WORKCELL_CODE = hlv1.`VALUE`
+        AND hlv1.lov_code = 'HME.COS_LL_WORKCELL'
+        AND hlv1.tenant_id = mmw1.TENANT_ID
+        GROUP BY
+        t.wafer,
+        t.work_order_id
+    </select>
+
+    <select id="selectNgQtyList" resultType="com.ruike.hme.domain.valueobject.HmeCosNcRecord">
+        select
+        cnr.work_order_id,
+        cnr.wafer_num,
+        cnr.operation_id,
+        cnr.workcell_id,
+        cnr.created_by,
+        date_format(cnr.creation_date, '%Y-%m-%d') creation_date,
+        ifnull( sum( cnr.defect_count ), 0 ) AS defect_count
+        FROM
+        hme_cos_nc_record cnr
+        WHERE
+        cnr.tenant_id = #{tenantId}
+        AND cnr.wafer_num IN
+        <foreach collection="waferList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND cnr.work_order_id IN
+        <foreach collection="workOrderList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND cnr.operation_id IN
+        <foreach collection="operationIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND cnr.workcell_id IN
+        <foreach collection="workcellIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND cnr.created_by IN
+        <foreach collection="createdByList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        GROUP BY
+        cnr.work_order_id,
+        cnr.wafer_num,
+        cnr.operation_id,
+        cnr.workcell_id,
+        cnr.created_by,
+        cnr.creation_date
+    </select>
+
+    <select id="selectNgQtyListNew" resultType="com.ruike.hme.domain.valueobject.HmeCosNcRecord">
+        select
+        cnr.work_order_id,
+        cnr.wafer_num,
+        cnr.operation_id,
+        cnr.workcell_id,
+        cnr.created_by,
+        date_format(cnr.creation_date, '%Y-%m-%d') creation_date,
+        ifnull( sum( cnr.defect_count ), 0 ) AS defect_count
+        FROM
+        hme_cos_nc_record cnr
+        WHERE
+        cnr.tenant_id = #{tenantId}
+        and (cnr.wafer_num, cnr.work_order_id, cnr.operation_id, cnr.workcell_id, cnr.created_by) in
+        <foreach collection="dtoList" separator="," item="item" open="(" close=")">
+            (#{item.waferNum}, #{item.workOrderId}, #{item.operationId}, #{item.workcellId}, #{item.createdBy})
+        </foreach>
+        GROUP BY
+        cnr.work_order_id,
+        cnr.wafer_num,
+        cnr.operation_id,
+        cnr.workcell_id,
+        cnr.created_by,
+        cnr.creation_date
+    </select>
+
+    <select id="selectEoJobSnList" resultType="com.ruike.hme.domain.valueobject.HmeEoJobSn">
+        SELECT
+        hejs.job_id,
+        ifnull( sum( hejs.sn_qty ), 0 ) sn_qty,
+        date_format( hejs.creation_date, '%Y-%m-%d' ) creation_date
+        FROM
+        hme_eo_job_sn hejs
+        WHERE
+        hejs.source_job_id IN
+        <foreach collection="sourceJobIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND hejs.tenant_id = #{tenantId}
+        GROUP BY
+        hejs.job_id,
+        date_format( hejs.creation_date, '%Y-%m-%d' )
+    </select>
+
+</mapper>

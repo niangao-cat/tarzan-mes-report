@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.wms.infra.mapper.WmsDistributionGeneralMapper">
+
+    <select id="selectListByCondition" resultType="com.ruike.wms.domain.vo.WmsDistributionGeneralVO">
+        select doc.instruction_doc_num,
+        doc.instruction_doc_id,
+        mms.site_code,
+        doc.instruction_doc_status,
+        ma1.attr_value as production_line_code,
+        ma2.attr_value as workcell_code,
+        mml.locator_code as to_warehouse_code,
+        doc.remark,
+        usr.real_name created_by_name,
+        DATE_FORMAT(doc.creation_date,'%Y-%m-%d %H:%m:%s') creation_date,
+        usru.real_name last_Updated_By_Name,
+        DATE_FORMAT(doc.LAST_UPDATE_DATE,'%Y-%m-%d %H:%m:%s') last_update_date,
+        mia_ln.attr_value instruction_line_num,
+        mm.material_code,
+        mm.material_name,
+        mia_ver.attr_value material_version,
+        ins.instruction_status,
+        ins.quantity,
+        ifnull((select sum(mia.actual_qty)
+        from mt_instruction_actual mia
+        where mia.instruction_id = ins.instruction_id), 0) actual_qty,
+        mia_sq.attr_value signed_qty,
+        uom.uom_code,
+        concat(mia_so.attr_value,
+        case when ifnull(mia_sol.attr_value,'') = ''
+        then null
+        else concat('-', mia_sol.attr_value)
+        end) so_line
+        FROM mt_instruction_doc doc
+        LEFT JOIN mt_instruction_doc_attr ma1 ON doc.INSTRUCTION_DOC_ID = ma1.INSTRUCTION_DOC_ID
+        AND ma1.ATTR_NAME = 'PROD_LINE_CODE'
+        LEFT JOIN mt_mod_production_line mmpl ON mmpl.PROD_LINE_CODE = ma1.ATTR_VALUE
+        LEFT JOIN mt_instruction_doc_attr ma2 ON doc.INSTRUCTION_DOC_ID = ma2.INSTRUCTION_DOC_ID
+        AND ma2.ATTR_NAME = 'WORKCELL'
+        LEFT JOIN mt_mod_workcell mmw ON mmw.WORKCELL_CODE = ma2.ATTR_VALUE
+        LEFT JOIN mt_instruction_doc_attr ma3 ON doc.INSTRUCTION_DOC_ID = ma3.INSTRUCTION_DOC_ID
+        AND ma3.ATTR_NAME = 'TO_LOCATOR_ID'
+        LEFT JOIN mt_instruction_doc_attr ma_sf ON doc.INSTRUCTION_DOC_ID = ma_sf.INSTRUCTION_DOC_ID
+        AND ma_sf.ATTR_NAME = 'SUPPLY_FLAG'
+        LEFT JOIN mt_instruction_doc_attr ma_rln ON doc.INSTRUCTION_DOC_ID = ma_rln.INSTRUCTION_DOC_ID
+        AND ma_rln.ATTR_NAME = 'REPLENISHMENT_LIST_NUM'
+        left join mt_instruction_doc rep_doc on rep_doc.INSTRUCTION_DOC_ID = ma_rln.ATTR_VALUE
+        LEFT JOIN mt_mod_locator mml ON ma3.ATTR_VALUE = mml.LOCATOR_ID,
+        mt_mod_site mms,
+        iam_user usr,
+        iam_user usru,
+        mt_instruction ins
+        left join mt_instruction_attr mia_ln ON mia_ln.instruction_id = ins.instruction_id
+        and mia_ln.attr_name = 'INSTRUCTION_LINE_NUM'
+        left join mt_instruction_attr mia_ver ON mia_ver.instruction_id = ins.instruction_id
+        and mia_ver.attr_name = 'MATERIAL_VERSION'
+        left join mt_instruction_attr mia_sq ON mia_sq.instruction_id = ins.instruction_id
+        and mia_sq.attr_name = 'SIGNED_QTY'
+        left join mt_instruction_attr mia_so ON mia_so.instruction_id = ins.instruction_id
+        and mia_so.attr_name = 'SO_NUM'
+        left join mt_instruction_attr mia_sol ON mia_sol.instruction_id = ins.instruction_id
+        and mia_sol.attr_name = 'SO_LINE_NUM',
+        mt_material mm,
+        mt_uom uom
+        WHERE doc.site_id = mms.site_id
+        and doc.created_by = usr.id
+        and doc.instruction_doc_id = ins.source_doc_id
+        and ins.material_id = mm.material_id
+        and uom.UOM_ID = ins.UOM_ID
+        and usru.id = doc.LAST_UPDATED_BY
+        and doc.instruction_doc_type = 'DISTRIBUTION_DOC'
+        and doc.tenant_id = #{tenantId}
+        and doc.creation_date between #{dto.creationDateFrom} and #{dto.creationDateTo}
+        <if test="dto.instructionDocNum != null and dto.instructionDocNum != ''">
+            <bind name="instructionDocNumLike" value="'%'+dto.instructionDocNum+'%'"/>
+            and doc.instruction_doc_num like #{instructionDocNumLike}
+        </if>
+        <if test="dto.instructionDocStatus != null and dto.instructionDocStatus != ''">
+            and doc.instruction_doc_status = #{dto.instructionDocStatus}
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            and mmpl.prod_line_id IN
+            <foreach collection="dto.prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            and mmw.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.toWarehouseIdList != null and dto.toWarehouseIdList.size() > 0">
+            and ma3.ATTR_VALUE IN
+             <foreach collection="dto.toWarehouseIdList" item="item" index="index" open="(" close=")" separator=",">
+                 #{item}
+             </foreach>
+        </if>
+        <if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+            and mm.material_code IN
+            <foreach collection="dto.materialCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialVersion != null and dto.materialVersion != ''">
+            and mia_ver.attr_value = #{dto.materialVersion}
+        </if>
+        <if test="dto.suiteFlag != null">
+            <choose>
+                <when test="dto.suiteFlag == 'N'.toString() ">
+                    and doc.instruction_doc_id in (select ins.source_doc_id
+                    from mt_instruction ins
+                    where ins.QUANTITY > (select ifnull(sum(mia.ACTUAL_QTY),0)
+                    from mt_instruction_actual mia
+                    where mia.instruction_id = ins.instruction_id))
+                </when>
+                <when test="dto.suiteFlag == 'Y'.toString() ">
+                    and doc.instruction_doc_id not in (select ins.source_doc_id
+                    from mt_instruction ins
+                    where ins.QUANTITY > (select ifnull(sum(mia.ACTUAL_QTY),0)
+                    from mt_instruction_actual mia
+                    where mia.instruction_id = ins.instruction_id))
+                </when>
+            </choose>
+        </if>
+        <if test="dto.replenishmentFlag != null and dto.replenishmentFlag != ''">
+            and ifnull(ma_sf.ATTR_VALUE,'N') = #{dto.replenishmentFlag}
+        </if>
+        <if test="dto.replenishmentListNum != null and dto.replenishmentListNum != ''">
+            <bind name="replenishmentListNumLike" value="'%'+dto.replenishmentListNum+'%'"/>
+            and rep_doc.instruction_doc_num like #{replenishmentListNumLike}
+        </if>
+        <if test="dto.createdBy != null">
+            and doc.created_by = #{dto.createdBy}
+        </if>
+        <if test="dto.instructionStatus != null and dto.instructionStatus != ''">
+            AND ins.INSTRUCTION_STATUS = #{dto.instructionStatus}
+        </if>
+        <if test="dto.updateDateFrom != null and dto.updateDateFrom != ''">
+            AND doc.LAST_UPDATE_DATE >= #{dto.updateDateFrom}
+        </if>
+        <if test="dto.updateDateTo != null and dto.updateDateTo != ''">
+            AND doc.LAST_UPDATE_DATE <![CDATA[<=]]> #{dto.updateDateTo}
+        </if>
+        order by doc.creation_date desc
+        ,mia_ln.attr_value + 0
+    </select>
+
+    <select id="selectDistribution" resultType="com.ruike.wms.domain.vo.WmsDistributionListQueryVO1">
+        SELECT mit1.ATTR_VALUE     INSTRUCTION_NUM,
+               t.INSTRUCTION_STATUS,
+               mm.MATERIAL_ID,
+               mm.MATERIAL_CODE,
+               mit.ATTR_VALUE AS   material_version,
+               mm.MATERIAL_NAME,
+               t.QUANTITY,
+               sum(mia.ACTUAL_QTY) acutal_qty,
+               mu.UOM_CODE,
+               t.REMARK,
+               t.INSTRUCTION_ID,
+               mit2.ATTR_VALUE     SIGNED_QTY,
+               mit3.ATTR_VALUE     rel_so_num,
+               mit4.ATTR_VALUE     rel_so_line_num,
+               mit5.ATTR_VALUE     backflush_flag,
+               CONCAT(
+                       mit3.ATTR_VALUE,
+                       IF
+                           (
+                               mit4.ATTR_VALUE = '',
+                               NULL,
+                               IF
+                                   (mit4.ATTR_VALUE IS NULL, NULL, CONCAT('-', mit4.ATTR_VALUE))
+                           )
+                   )               so_num
+        FROM mt_instruction t
+                 LEFT JOIN mt_instruction_attr mit ON mit.ATTR_NAME = 'MATERIAL_VERSION'
+            AND t.INSTRUCTION_ID = mit.INSTRUCTION_ID
+                 LEFT JOIN mt_instruction_actual mia ON t.INSTRUCTION_ID = mia.INSTRUCTION_ID
+                 LEFT JOIN mt_instruction_attr mit1 ON mit1.INSTRUCTION_ID = t.INSTRUCTION_ID
+            AND mit1.ATTR_NAME = 'INSTRUCTION_LINE_NUM'
+                 LEFT JOIN mt_instruction_attr mit2 ON mit2.INSTRUCTION_ID = t.INSTRUCTION_ID
+            AND mit2.ATTR_NAME = 'SIGNED_QTY'
+                 LEFT JOIN mt_instruction_attr mit3 ON mit3.INSTRUCTION_ID = t.INSTRUCTION_ID
+            AND mit3.ATTR_NAME = 'SO_NUM'
+                 LEFT JOIN mt_instruction_attr mit4 ON mit4.INSTRUCTION_ID = t.INSTRUCTION_ID
+            AND mit4.ATTR_NAME = 'SO_LINE_NUM'
+                 LEFT JOIN mt_instruction_attr mit5 ON mit5.INSTRUCTION_ID = t.INSTRUCTION_ID
+	        AND mit5.ATTR_NAME = 'BACKFLUSH_FLAG',
+             mt_material mm,
+             mt_uom mu
+        WHERE mia.TENANT_ID = #{tenantId}
+          AND t.TENANT_ID = #{tenantId}
+          AND t.SOURCE_DOC_ID = #{sourceDocId}
+          AND t.MATERIAL_ID = mm.MATERIAL_ID
+          AND t.UOM_ID = mu.UOM_ID
+        GROUP BY mit1.ATTR_VALUE,
+                 t.INSTRUCTION_STATUS,
+                 mm.MATERIAL_ID,
+                 mm.MATERIAL_CODE,
+                 mit.ATTR_VALUE,
+                 mm.MATERIAL_NAME,
+                 t.QUANTITY,
+                 mu.UOM_CODE,
+                 t.REMARK,
+                 t.INSTRUCTION_ID,
+                 mit2.ATTR_VALUE,
+                 mit3.ATTR_VALUE,
+                 mit4.ATTR_VALUE,
+                 mit5.ATTR_VALUE
+        order by case t.INSTRUCTION_STATUS when 'PREPARE_EXECUTE' then 1 when 'RELEASED' then 2 else 99 end,
+                 mit1.ATTR_VALUE
+    </select>
+
+</mapper>

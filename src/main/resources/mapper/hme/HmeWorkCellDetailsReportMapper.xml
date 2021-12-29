@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeWorkCellDetailsReportMapper">
+
+    <select id="queryWorkCellReportList" resultType="com.ruike.hme.domain.vo.HmeWorkCellDetailsReportVO2">
+        SELECT
+        hjs.job_id AS jobId,
+        hjs.workcell_id AS workcellId,
+        mor.processId,
+        mor.productionLineId,
+        mor.lineWorkcellId,
+        mm.material_code AS snMaterialName,
+        mm.material_name AS materialDesc,
+        mwo.work_order_num AS workOrderNum,
+        mml.material_lot_code AS materialLotCode,
+        hjs.job_type AS jobPlatformCode,
+        hjs.flag,
+        mml.primary_uom_qty AS primaryUomQty,
+        hjs.rework_flag AS reworkFlag,
+        hjs.site_in_by AS siteInBy,
+        hjs.site_out_by AS siteOutBy,
+        hjs.workerTime AS workerTime
+        FROM
+        (
+        <if test="reportVO.siteFlag != null and reportVO.siteFlag != ''">
+            <choose>
+                <when test='reportVO.siteFlag == "Y"'>
+                    SELECT
+                    *, 'Y' AS flag,site_out_date AS workerTime
+                    FROM hme_eo_job_sn
+
+                    WHERE site_in_date IS NOT NULL AND site_out_date IS NOT NULL
+                    AND tenant_id = #{tenantId}
+                    <if test="reportVO.reworkFlag != null and reportVO.reworkFlag != ''">
+                        AND rework_flag = #{reportVO.reworkFlag}
+                    </if>
+                    <if test="reportVO.workcellIdList != null and reportVO.workcellIdList.size() > 0">
+                        AND workcell_id IN
+                        <foreach collection="reportVO.workcellIdList" index="index" item="item" open="(" close=")" separator=",">
+                           #{item}
+                        </foreach>
+                    </if>
+                    <if test="reportVO.snMaterialId != null and reportVO.snMaterialId != ''">
+                        AND sn_material_id = #{reportVO.snMaterialId}
+                    </if>
+                    <if test="reportVO.startTime != null and reportVO.startTime != ''">
+                        AND site_out_date >= #{reportVO.startTime}
+                    </if>
+                    <if test="reportVO.endTime != null and reportVO.endTime != ''">
+                        AND site_out_date <![CDATA[<=]]> #{reportVO.endTime}
+                    </if>
+                    AND job_type != 'SSN_PROCESS'
+                </when>
+                <otherwise>
+                    SELECT
+                    *,'N' AS flag,site_in_date AS workerTime
+                    FROM hme_eo_job_sn
+                    WHERE tenant_id = #{tenantId}
+                    <if test="reportVO.reworkFlag != null and reportVO.reworkFlag != ''">
+                        AND rework_flag = #{reportVO.reworkFlag}
+                    </if>
+                    <if test="reportVO.workcellIdList != null and reportVO.workcellIdList.size() > 0">
+                        AND workcell_id IN
+                        <foreach collection="reportVO.workcellIdList" index="index" item="item" open="(" close=")" separator=",">
+                            #{item}
+                        </foreach>
+                    </if>
+                    <if test="reportVO.snMaterialId != null and reportVO.snMaterialId != ''">
+                        AND sn_material_id = #{reportVO.snMaterialId}
+                    </if>
+                    <if test="reportVO.startTime != null and reportVO.startTime != ''">
+                        AND site_in_date >= #{reportVO.startTime}
+                    </if>
+                    <if test="reportVO.endTime != null and reportVO.endTime != ''">
+                        AND site_in_date <![CDATA[<=]]> #{reportVO.endTime}
+                    </if>
+                    AND job_type != 'SSN_PROCESS'
+                </otherwise>
+            </choose>
+        </if>
+        <if test='reportVO.siteFlag == null or reportVO.siteFlag == ""'>
+            SELECT
+            *,'N' AS flag,site_in_date AS workerTime
+            FROM hme_eo_job_sn
+            WHERE tenant_id = #{tenantId}
+            <if test="reportVO.reworkFlag != null and reportVO.reworkFlag != ''">
+                AND rework_flag = #{reportVO.reworkFlag}
+            </if>
+            <if test="reportVO.workcellIdList != null and reportVO.workcellIdList.size() > 0">
+                AND workcell_id IN
+                <foreach collection="reportVO.workcellIdList" index="index" item="item" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="reportVO.snMaterialId != null and reportVO.snMaterialId != ''">
+                AND sn_material_id = #{reportVO.snMaterialId}
+            </if>
+            <if test="reportVO.startTime != null and reportVO.startTime != ''">
+                AND site_in_date >= #{reportVO.startTime}
+            </if>
+            <if test="reportVO.endTime != null and reportVO.endTime != ''">
+                AND site_in_date <![CDATA[<=]]> #{reportVO.endTime}
+            </if>
+            AND job_type != 'SSN_PROCESS'
+            UNION ALL
+            ( SELECT
+            *, 'Y' AS flag,site_out_date AS workerTime
+            FROM hme_eo_job_sn
+
+            WHERE site_in_date IS NOT NULL AND site_out_date IS NOT NULL
+            AND tenant_id = #{tenantId}
+            <if test="reportVO.reworkFlag != null and reportVO.reworkFlag != ''">
+                AND rework_flag = #{reportVO.reworkFlag}
+            </if>
+            <if test="reportVO.workcellIdList != null and reportVO.workcellIdList.size() > 0">
+                AND workcell_id IN
+                <foreach collection="reportVO.workcellIdList" index="index" item="item" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="reportVO.snMaterialId != null and reportVO.snMaterialId != ''">
+                AND sn_material_id = #{reportVO.snMaterialId}
+            </if>
+            <if test="reportVO.startTime != null and reportVO.startTime != ''">
+                AND site_out_date >= #{reportVO.startTime}
+            </if>
+            <if test="reportVO.endTime != null and reportVO.endTime != ''">
+                AND site_out_date <![CDATA[<=]]> #{reportVO.endTime}
+            </if>
+            AND job_type != 'SSN_PROCESS'
+            )
+        </if>
+        ) hjs
+        LEFT JOIN mt_material mm ON mm.material_id = hjs.sn_material_id
+        LEFT JOIN mt_work_order mwo ON mwo.work_order_id = hjs.work_order_id
+        LEFT JOIN mt_material_lot mml ON mml.material_lot_id = hjs.material_lot_id
+        LEFT JOIN ( SELECT
+        mor1.ORGANIZATION_ID AS workcellId,
+        mor2.ORGANIZATION_ID AS processId,
+        mor3.ORGANIZATION_ID AS lineWorkcellId,
+        mor4.ORGANIZATION_ID AS productionLineId,
+        mor6.ORGANIZATION_ID AS workshopId,
+        mor6.TOP_SITE_ID AS siteId
+        FROM
+        mt_mod_organization_rel mor1
+        LEFT JOIN mt_mod_organization_rel mor2 ON mor2.ORGANIZATION_ID = mor1.PARENT_ORGANIZATION_ID
+        AND mor2.ORGANIZATION_TYPE = "WORKCELL"
+        LEFT JOIN mt_mod_organization_rel mor3 ON mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mor3.ORGANIZATION_TYPE = "WORKCELL"
+        AND mor3.PARENT_ORGANIZATION_TYPE = "PROD_LINE"
+        LEFT JOIN mt_mod_organization_rel mor4 ON mor4.ORGANIZATION_ID = mor3.PARENT_ORGANIZATION_ID
+        AND mor4.ORGANIZATION_TYPE = "PROD_LINE"
+        AND mor4.PARENT_ORGANIZATION_TYPE = "AREA"
+        LEFT JOIN mt_mod_organization_rel mor5 ON mor5.ORGANIZATION_ID = mor4.PARENT_ORGANIZATION_ID
+        AND mor5.ORGANIZATION_TYPE = "AREA"
+        AND mor5.PARENT_ORGANIZATION_TYPE = "AREA"
+        LEFT JOIN mt_mod_organization_rel mor6 ON mor6.ORGANIZATION_ID = mor5.PARENT_ORGANIZATION_ID
+        AND mor6.ORGANIZATION_TYPE = "AREA"
+        AND mor6.PARENT_ORGANIZATION_TYPE = "AREA"
+        WHERE
+        mor2.ORGANIZATION_ID IS NOT NULL
+        AND mor3.ORGANIZATION_ID IS NOT NULL
+        AND mor4.ORGANIZATION_ID IS NOT NULL
+        AND mor5.ORGANIZATION_ID IS NOT NULL
+        AND mor6.ORGANIZATION_ID IS NOT NULL) mor ON mor.workcellId = hjs.workcell_id AND mor.productionLineId =
+        mwo.PRODUCTION_LINE_ID
+        WHERE
+        hjs.tenant_id = #{tenantId}
+        <if test="reportVO.siteId != null and reportVO.siteId != ''">
+            AND mor.siteId = #{reportVO.siteId}
+        </if>
+        <if test="reportVO.workshop != null and reportVO.workshop != ''">
+            AND mor.workshopId = #{reportVO.workshop}
+        </if>
+        <if test="reportVO.productionLineId != null and reportVO.productionLineId != ''">
+            AND mor.productionLineId = #{reportVO.productionLineId}
+        </if>
+        <if test="reportVO.lineWorkcellId != null and reportVO.lineWorkcellId != ''">
+            AND mor.lineWorkcellId = #{reportVO.lineWorkcellId}
+        </if>
+        <if test="reportVO.workOrder != null and reportVO.workOrder != ''">
+            AND mwo.work_order_num LIKE CONCAT(#{reportVO.workOrder},"%")
+        </if>
+        <if test="reportVO.materialLotCode != null and reportVO.materialLotCode != ''">
+            AND mml.material_lot_code LIKE CONCAT(#{reportVO.materialLotCode},"%")
+        </if>
+        <if test="reportVO.processId != null and reportVO.processId != ''">
+            AND mor.processId = #{reportVO.processId}
+        </if>
+        ORDER BY hjs.creation_date DESC,hjs.flag ASC
+    </select>
+
+    <select id="selectByIdsCustomWorkcell" resultType="com.ruike.hme.domain.vo.HmeModWorkcellVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        select
+--         t1.TENANT_ID,
+        t1.WORKCELL_ID,
+--         t1.WORKCELL_CODE,
+        t2.WORKCELL_NAME
+--         t2.DESCRIPTION,
+--         t1.WORKCELL_TYPE,
+--         t2.WORKCELL_LOCATION,
+--         t1.ENABLE_FLAG,
+--         t1.WORKCELL_CATEGORY,
+--         t1.CID,
+--         t1.OBJECT_VERSION_NUMBER,
+--         t1.CREATED_BY,
+--         t1.CREATION_DATE,
+--         t1.LAST_UPDATED_BY,
+--         t1.LAST_UPDATE_DATE
+        from mt_mod_workcell t1 INNER join mt_mod_workcell_tl t2 on
+        (t1.WORKCELL_ID=t2.WORKCELL_ID and t2.LANG=#{lang})
+        WHERE
+        t1.TENANT_ID = #{tenantId}
+        and t1.WORKCELL_ID IN
+        <foreach collection="workcellIds" index="index" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="selectByIdsCustomProdLine" resultType="com.ruike.hme.domain.vo.HmeModProductionLineVO">
+        <bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        select
+--         t1.TENANT_ID,
+        t1.PROD_LINE_ID,
+--         t1.PROD_LINE_CODE,
+        t2.PROD_LINE_NAME
+--         t2.DESCRIPTION,
+--         t1.PROD_LINE_TYPE,
+--         t1.SUPPLIER_ID,
+--         t1.SUPPLIER_SITE_ID,
+--         t1.ENABLE_FLAG,
+--         t1.PROD_LINE_CATEGORY,
+--         t1.CID,
+--         t1.OBJECT_VERSION_NUMBER,
+--         t1.CREATED_BY,
+--         t1.CREATION_DATE,
+--         t1.LAST_UPDATED_BY,
+--         t1.LAST_UPDATE_DATE
+        from mt_mod_production_line t1 inner join mt_mod_production_line_tl t2 on (t1.PROD_LINE_ID=t2.PROD_LINE_ID and
+        t2.LANG=#{lang})
+        where t1.TENANT_ID = #{tenantId}
+        and t1.PROD_LINE_ID IN
+        <foreach collection="prodLineIds" index="index" item="item" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+    </select>
+</mapper>

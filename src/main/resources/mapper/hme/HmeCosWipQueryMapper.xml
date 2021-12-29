@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosWipQueryMapper">
+
+    <select id="cosWipQuery" resultType="com.ruike.hme.domain.vo.HmeCosWipQueryVO">
+        SELECT
+        mms.SITE_NAME,
+        mml.MATERIAL_LOT_CODE,
+        hej.ATTRIBUTE5 WAFER_NUM,
+        hej.ATTRIBUTE3 COS_TYPE,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        hej.work_order_id,
+        hej.sn_qty PRIMARY_UOM_QTY,
+        mlp.LOCATOR_CODE parent_locator_code,
+        ml.LOCATOR_CODE,
+        hej.eo_step_num,
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME,
+        hej.job_type,
+        hej.site_in_date,
+        DATE_FORMAT(hej.site_in_date,'%Y-%m-%d %H:%i:%S') site_in_date_str,
+        hej.site_in_by site_in_by_id,
+        hej.site_out_date,
+        DATE_FORMAT(hej.site_out_date,'%Y-%m-%d %H:%i:%S') site_out_date_str,
+        hej.site_out_by site_out_by_id,
+        hej.rework_flag,
+        CONCAT_WS('/', he.ASSET_ENCODING) ASSET_ENCODING,
+        CONCAT_WS('/', he.ASSET_NAME) ASSET_NAME
+        FROM
+        hme_eo_job_sn hej
+        LEFT JOIN hme_eo_job_equipment heje ON heje.job_id = hej.job_id
+        LEFT JOIN hme_equipment he ON he.EQUIPMENT_ID = heje.equipment_id,
+        mt_mod_site mms,
+        mt_material mm,
+        mt_material_lot mml,
+        mt_mod_locator ml
+        LEFT JOIN mt_mod_locator mlp ON mlp.LOCATOR_ID = ml.PARENT_LOCATOR_ID,
+        mt_mod_workcell mmw
+        WHERE
+        1 = 1
+        AND hej.material_lot_id = mml.MATERIAL_LOT_ID
+        AND hej.tenant_id = mml.TENANT_ID
+        AND mml.MATERIAL_ID = mm.MATERIAL_ID
+        AND mml.SITE_ID = mms.SITE_ID
+        AND mml.LOCATOR_ID = ml.LOCATOR_ID
+        AND hej.workcell_id = mmw.WORKCELL_ID
+        AND hej.tenant_id = #{tenantId}
+        <if test="dto.materialLotIds != null and dto.materialLotIds.size() > 0">
+            and hej.material_lot_id in
+            <foreach collection="dto.materialLotIds" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            AND mml.SITE_ID = #{dto.siteId}
+        </if>
+        <if test="dto.equipmentId != null and dto.equipmentId != ''">
+            AND he.EQUIPMENT_ID = #{dto.equipmentId}
+        </if>
+        <if test="dto.workOrderIds != null and dto.workOrderIds.size() > 0">
+            and hej.work_order_id in
+            <foreach collection="dto.workOrderIds" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != ''">
+            AND mml.MATERIAL_LOT_CODE like CONCAT(#{dto.materialLotCode},'%')
+        </if>
+        <if test="dto.materialCode != null and dto.materialCode != ''">
+            AND mm.MATERIAL_CODE like CONCAT(CONCAT(#{dto.materialCode},'%'))
+        </if>
+        <if test="dto.materialName != null and dto.materialName != ''">
+            AND mm.MATERIAL_NAME like CONCAT(CONCAT(#{dto.materialName},'%'))
+        </if>
+        <if test="dto.workCellId != null and dto.workCellId != ''">
+            AND hej.workcell_id = #{dto.workCellId}
+        </if>
+        <if test="dto.jobType != null and dto.jobType != ''">
+            AND FIND_IN_SET(hej.job_type, #{dto.jobType})
+        </if>
+        <if test="dto.siteInDateFrom != null and dto.siteInDateFrom != ''">
+            AND hej.site_in_date <![CDATA[ >= ]]> #{dto.siteInDateFrom}
+        </if>
+        <if test="dto.siteInDateTo != null and dto.siteInDateTo != ''">
+            AND hej.site_in_date <![CDATA[ <= ]]> #{dto.siteInDateTo}
+        </if>
+        <if test="dto.siteOutDateFrom != null and dto.siteOutDateFrom != ''">
+            AND hej.site_out_date <![CDATA[ >= ]]> #{dto.siteOutDateFrom}
+        </if>
+        <if test="dto.siteOutDateTo != null and dto.siteOutDateTo != ''">
+            AND hej.site_out_date <![CDATA[ <= ]]> #{dto.siteOutDateTo}
+        </if>
+        <if test="dto.waferNum != null and dto.waferNum != ''">
+            AND hej.ATTRIBUTE5 LIKE CONCAT(#{dto.waferNum}, '%')
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            AND hej.ATTRIBUTE3 LIKE CONCAT(#{dto.cosType}, '%')
+        </if>
+    </select>
+
+    <select id="selectWorkOrderList" resultType="java.lang.String">
+        select mwo.work_order_id
+        from mt_work_order mwo,
+        mt_material mm
+        where mm.material_id = mwo.material_id
+        <if test="dto.workOrderNum != null and dto.workOrderNum != ''">
+            AND mwo.WORK_ORDER_NUM like CONCAT(#{dto.workOrderNum},'%')
+        </if>
+        <if test="dto.productionCode != null and dto.productionCode != ''">
+            AND mm.MATERIAL_CODE like CONCAT(#{dto.productionCode},'%')
+        </if>
+        <if test="dto.productionName != null and dto.productionName != ''">
+            AND mm.MATERIAL_NAME like CONCAT('%',CONCAT(#{dto.productionName},'%'))
+        </if>
+    </select>
+
+    <select id="selectWorkOrderProduction" resultType="com.ruike.hme.domain.vo.WorkOrderProductionVO">
+        select mwo.work_order_id
+        ,mwo.work_order_num
+        ,mm.material_id
+        ,mm.material_code
+        ,mm.material_name
+        from mt_work_order mwo,
+        mt_material mm
+        where mm.material_id = mwo.material_id
+        and mwo.work_order_id in
+        <foreach collection="ids" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectMaterialLot" resultType="com.ruike.hme.domain.vo.HmeCosWipQueryVO2">
+        SELECT
+        mml.MATERIAL_LOT_ID
+        FROM
+        mt_material_lot mml
+        WHERE
+        mml.TENANT_ID = #{tenantId}
+        AND mml.MATERIAL_LOT_CODE like CONCAT(#{dto.materialLotCode},'%')
+    </select>
+
+    <select id="selectMaterialLotIdOfWafer" resultType="com.ruike.hme.domain.vo.HmeCosWipQueryVO2">
+        SELECT
+        mmla.MATERIAL_LOT_ID
+        FROM
+        mt_material_lot_attr mmla
+        WHERE
+        mmla.TENANT_ID = #{tenantId}
+        AND mmla.ATTR_NAME = 'WAFER_NUM'
+        AND mmla.ATTR_VALUE LIKE CONCAT(#{dto.waferNum}, '%')
+    </select>
+</mapper>

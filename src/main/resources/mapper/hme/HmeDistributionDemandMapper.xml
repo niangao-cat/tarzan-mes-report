@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeDistributionDemandMapper">
+
+    <select id="selectDemandList" resultType="com.ruike.hme.domain.vo.HmeDistributionDemandVO">
+        select wdd.dist_demand_id
+        ,wdd.site_id
+        ,mms.site_code
+        ,wdd.prod_line_id
+        ,prl.prod_line_code
+        ,wdd.workcell_id
+        ,wkc.workcell_code
+        ,wdd.material_id
+        ,mm.material_code
+        ,mm.material_name
+        ,wdd.material_version
+        ,wdd.requirement_qty demand_qty
+        ,mcs.shift_date demand_date
+        ,ifnull((select sum(ifnull(mia.ATTR_VALUE+0,0))
+        from wms_distribution_demand_detail wddd
+        ,mt_instruction_attr mia
+        where wddd.instruction_id = mia.INSTRUCTION_ID
+        and mia.ATTR_NAME = 'SIGNED_QTY'
+        and wddd.dist_demand_id = wdd.dist_demand_id),0) distributed_qty
+        from wms_distribution_demand wdd
+        ,mt_material mm
+        ,mt_calendar_shift mcs
+        ,mt_mod_site mms
+        ,mt_mod_production_line prl
+        ,mt_mod_workcell wkc
+        where wdd.material_id = mm.material_id
+        and wdd.calendar_shift_id = mcs.calendar_shift_id
+        and wdd.site_id = mms.site_id
+        and wdd.workcell_id = wkc.workcell_id
+        and wdd.prod_line_id = prl.prod_line_id
+        and mcs.shift_date between #{dto.startDate} and #{dto.endDate}
+        and wdd.tenant_id = #{tenantId}
+        <if test="dto.siteId != null">
+            and wdd.site_id = #{dto.siteId}
+        </if>
+        <if test="dto.prodLineId != null">
+            and wdd.prod_line_id = #{dto.prodLineId}
+        </if>
+        <if test="dto.materialCode != null">
+            <bind name="materialCodeLike" value="'%'+dto.materialCode+'%'"/>
+            and mm.material_code like #{materialCodeLike}
+        </if>
+        <if test="dto.materialVersion != null">
+            and wdd.material_version = #{dto.materialVersion}
+        </if>
+        order by wdd.dist_demand_id
+    </select>
+
+    <select id="selectWorkcellQtyList" resultType="com.ruike.hme.domain.vo.HmeDistributionDemandQtyVO">
+        select ml.material_id
+        ,ifnull(mml_ver.attr_value,'') material_version
+        ,mlor.organization_id workcell_id
+        , ifnull(sum(ml.primary_uom_qty), 0) quantity
+        from mt_material_lot ml
+        left join mt_material_lot_attr mml_ver on ml.material_lot_id = mml_ver.material_lot_id
+        and mml_ver.attr_name = 'MATERIAL_VERSION'
+        ,mt_mod_locator_org_rel mlor
+        where ml.ENABLE_FLAG = 'Y'
+        and ml.QUALITY_STATUS = 'OK'
+        and mlor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mlor.LOCATOR_ID = ml.LOCATOR_ID
+        and
+        <foreach collection="dtos" item="item" separator=" or " open="(" close=")">
+            (ml.MATERIAL_ID = #{item.materialId}
+            and ifnull(mml_ver.attr_value,'') = ifnull(#{item.materialVersion},'')
+            AND ml.SITE_ID = #{item.siteId}
+            and mlor.ORGANIZATION_ID = #{item.workcellId})
+        </foreach>
+        group by ml.material_id
+        ,ifnull(mml_ver.attr_value,'')
+        ,mlor.organization_id
+    </select>
+
+    <select id="selectInventoryQtyList" resultType="com.ruike.hme.domain.vo.HmeDistributionDemandQtyVO">
+        select ml.material_id
+        ,ifnull(mml_ver.attr_value,'') material_version
+        , ifnull(sum(case when ml.FREEZE_FLAG = 'Y' or (ml.FREEZE_FLAG != 'Y' and loc.LOCATOR_TYPE = 'RECEIVE_PENDING')
+        then 0 else ml.primary_uom_qty end), 0) quantity
+        from mt_material_lot ml
+        left join mt_material_lot_attr mml_ver on ml.material_lot_id = mml_ver.material_lot_id
+        and mml_ver.attr_name = 'MATERIAL_VERSION'
+        left join mt_material_lot_attr mml_mf on ml.material_lot_id = mml_mf.material_lot_id
+        and mml_mf.attr_name = 'MF_FLAG'
+        left join mt_mod_locator loc on ml.LOCATOR_ID = loc.LOCATOR_ID
+        where ml.ENABLE_FLAG = 'Y'
+        and ml.QUALITY_STATUS = 'OK'
+        and ifnull(mml_mf.ATTR_VALUE,'N') != 'Y'
+        and
+        <foreach collection="dtos" item="item" separator=" or " open="(" close=")">
+            (ml.MATERIAL_ID = #{item.materialId}
+            and ifnull(mml_ver.attr_value,'') = ifnull(#{item.materialVersion},'')
+            AND ml.SITE_ID = #{item.siteId})
+        </foreach>
+        group by ml.material_id
+        ,ifnull(mml_ver.attr_value,'')
+    </select>
+
+</mapper>

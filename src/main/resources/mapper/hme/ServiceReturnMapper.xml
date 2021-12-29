@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.ServiceReturnMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.representation.ServiceReturnRepresentation">
+        select hsr.sn_num,
+        mml.material_lot_code refurbish_sn_num,
+        hsr.receive_status,
+        mm.material_code,
+        mm.material_name,
+        mmsa.attr_value as model,
+        MIN(hsdr.creation_date) return_check_date,
+        mmw.workcell_code return_check_workcell_code,
+        mmw.workcell_name return_check_workcell_name,
+        hsdr.created_by return_check_user_id
+        from hme_service_data_record hsdr,
+        hme_service_receive hsr
+        left join hme_service_split_record hssr on hssr.service_receive_id = hsr.service_receive_id
+        and hssr.sn_num = hsr.sn_num
+        and hsr.tenant_id = hssr.tenant_id
+        left join mt_material_lot mml on mml.material_lot_id = hssr.material_lot_id,
+        mt_material mm,
+        mt_material_site mms
+        left join mt_material_site_attr mmsa on mmsa.material_site_id = mms.material_site_id
+        and mmsa.attr_name = 'attribute5',
+        mt_mod_workcell mmw
+        where hsdr.service_receive_id = hsr.service_receive_id
+        and hsr.material_id = mm.material_id
+        and mm.material_id = mms.material_id
+        and mms.site_id = hsr.site_id
+        and mmw.workcell_id = hsdr.workcell_id
+        and hsr.tenant_id = #{tenantId}
+        and hsr.site_id = #{siteId}
+        <if test="returnCheckUserId != null">
+            and hsdr.created_by = #{returnCheckUserId}
+        </if>
+        <if test="returnCheckDateStart != null">
+            and hsdr.creation_date &gt;= #{returnCheckDateStart}
+        </if>
+        <if test="returnCheckDateEnd != null">
+            and hsdr.creation_date &lt;= #{returnCheckDateEnd}
+        </if>
+        <if test="snNumList != null and snNumList.size() > 0">
+            and hsr.sn_num in
+            <foreach collection="snNumList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="refurbishSnNumList != null and refurbishSnNumList.size() > 0">
+            and mml.material_lot_code in
+            <foreach collection="refurbishSnNumList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="materialCodeList != null and materialCodeList.size() > 0">
+            and mm.material_code in
+            <foreach collection="materialCodeList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="returnCheckWorkcellCodeList != null and returnCheckWorkcellCodeList.size() > 0">
+            and mmw.workcell_code in
+            <foreach collection="returnCheckWorkcellCodeList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="workcellCodeList != null and workcellCodeList.size() > 0">
+            and exists (select 1
+            from mt_eo_step_wip sw,
+            mt_eo_step_actual sa,
+            mt_eo_router_actual ra,
+            mt_eo eo,
+            mt_eo_attr ea,
+            mt_mod_workcell mw
+            where sw.eo_step_actual_id = sa.eo_step_actual_id
+            and sa.eo_router_actual_id = ra.eo_router_actual_id
+            and ra.eo_id = eo.eo_id
+            and eo.eo_id = ea.eo_id
+            and ea.attr_name = 'REWORK_MATERIAL_LOT'
+            and ea.attr_value = mml.material_lot_code
+            and mw.workcell_id = sw.workcell_id
+            and mw.workcell_code in
+            <foreach collection="workcellCodeList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>)
+        </if>
+        GROUP BY
+        hsr.sn_num,
+        mml.material_lot_code,
+        hsr.receive_status,
+        mm.material_code,
+        mm.material_name,
+        mmsa.attr_value,
+        mmw.workcell_code,
+        mmw.workcell_name,
+        hsdr.created_by
+    </select>
+
+    <select id="selectSnWorkcellList" resultType="com.ruike.hme.domain.vo.SnWorkcellVO">
+        select mmw.workcell_code,
+        mmw.workcell_name,
+        ea.attr_value material_lot_code
+        from mt_mod_workcell mmw,
+        mt_eo_step_wip sw,
+        mt_eo_step_actual sa,
+        mt_eo_router_actual ra,
+        mt_eo eo,
+        mt_eo_attr ea
+        where mmw.workcell_id = sw.workcell_id
+        and sw.eo_step_actual_id = sa.eo_step_actual_id
+        and sa.eo_router_actual_id = ra.eo_router_actual_id
+        and ra.eo_id = eo.eo_id
+        and eo.eo_id = ea.eo_id
+        and ea.attr_name = 'REWORK_MATERIAL_LOT'
+        and mmw.TENANT_ID = #{tenantId}
+        and ea.attr_value in
+        <foreach collection="list" item="item" separator="," open="(" close=")">
+            #{item}
+        </foreach>
+    </select>
+
+</mapper>

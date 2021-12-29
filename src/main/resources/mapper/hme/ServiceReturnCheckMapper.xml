@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.ServiceReturnCheckMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.ServiceReturnCheckRepresentationDTO">
+        <bind name="locale" value="@org.hzero.core.helper.LanguageHelper@language()"/>
+        select ser.service_receive_id,
+        ser.sn_num,
+        mm.material_code,
+        mm.material_name,
+        mmsa.attr_value machine_type,
+        hli.creation_date receipt_date,
+        ser.receive_date split_date,
+        hli.logistics_company logistics,
+        hli.logistics_number,
+        hli.batch_number,
+        ser.receive_status,
+        sedr.tag_group_id,
+        mtg.tag_group_code,
+        mtgt.tag_group_description,
+        null tag_id,
+        sedr.result check_result,
+        sedr.remark,
+        sedr.attachment_uuid,
+        sedr.last_updated_by,
+        iu.real_name last_updated_by_name,
+        sedr.last_update_date,
+        sedr.workcell_id station_id,
+        mmw.workcell_code station_code,
+        mmw.workcell_name station_name
+        from hme_service_receive ser,
+        hme_logistics_info hli,
+        hme_service_data_record sedr,
+        mt_tag_group mtg,
+        mt_tag_group_tl mtgt,
+        iam_user iu,
+        mt_mod_workcell mmw,
+        mt_material mm,
+        mt_material_site mms
+        left join mt_material_site_attr mmsa on mmsa.material_Site_id = mms.material_site_id
+        and mmsa.attr_name = 'attribute5'
+        where ser.material_id = mm.MATERIAL_ID
+        and mm.MATERIAL_ID = mms.MATERIAL_ID
+        and ser.logistics_info_id = hli.logistics_info_id
+        and ser.service_receive_id = sedr.service_receive_id
+        and mmw.WORKCELL_ID = sedr.workcell_id
+        and mtg.TAG_GROUP_ID = sedr.tag_group_id
+        and mtgt.TAG_GROUP_ID = mtg.TAG_GROUP_ID
+        and iu.id = sedr.last_updated_by
+        and mtgt.LANG = #{locale}
+        and sedr.business_type = 'AF_INPUT'
+        and ser.tenant_id = #{tenantId}
+        and mms.site_id = #{dto.siteId}
+        <if test="dto.snNum != null">
+            and ser.sn_num in
+            <foreach collection="dto.snNums" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.materialCode != null">
+            and mm.material_code in
+            <foreach collection="dto.materialCodes" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.machineType != null">
+            <bind name="machineTypeLike" value="'%'+dto.machineType+'%'"/>
+            and mmsa.attr_value like #{machineTypeLike}
+        </if>
+        <if test="dto.logistics != null">
+            and hli.logistics_company = #{dto.logistics}
+        </if>
+        <if test="dto.logisticsNumber != null">
+            <bind name="logisticsNumberLike" value="'%'+dto.logisticsNumber+'%'"/>
+            and hli.logistics_number like #{logisticsNumberLike}
+        </if>
+        <if test="dto.batchNumber != null">
+            <bind name="batchNumberLike" value="'%'+dto.batchNumber+'%'"/>
+            and hli.batch_number like #{batchNumberLike}
+        </if>
+        <if test="dto.tagGroupCode != null">
+            and mtg.tag_group_code in
+            <foreach collection="dto.tagGroupCodes" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.receiveStatus != null">
+            and ser.receive_status = #{dto.receiveStatus}
+        </if>
+        <if test="dto.receiptDateFrom != null">
+            and hli.creation_date &gt;= #{dto.receiptDateFrom}
+        </if>
+        <if test="dto.receiptDateTo != null">
+            and hli.creation_date &lt;= #{dto.receiptDateTo}
+        </if>
+        <if test="dto.splitDateFrom != null">
+            and ser.receive_date &gt;= #{dto.splitDateFrom}
+        </if>
+        <if test="dto.splitDateTo != null">
+            and ser.receive_date &lt;= #{dto.splitDateTo}
+        </if>
+        <if test="dto.lastUpdateDateFrom != null">
+            and sedr.last_update_date &gt;= #{dto.lastUpdateDateFrom}
+        </if>
+        <if test="dto.lastUpdateDateTo != null">
+            and sedr.last_update_date &lt;= #{dto.lastUpdateDateTo}
+        </if>
+        union all
+        select ser.service_receive_id,
+        ser.sn_num,
+        mm.material_code,
+        mm.material_name,
+        mmsa.attr_value machine_type,
+        hli.creation_date receipt_date,
+        ser.receive_date split_date,
+        hli.logistics_company logistics,
+        hli.logistics_number,
+        hli.batch_number,
+        ser.receive_status,
+        sedr.tag_group_id,
+        mtg.tag_group_code,
+        mtgt.tag_group_description,
+        sedrl.tag_id,
+        mtl.TAG_DESCRIPTION check_result,
+        sedr.remark,
+        sedr.attachment_uuid,
+        sedr.last_updated_by,
+        iu.real_name last_updated_by_name,
+        sedr.last_update_date,
+        sedr.workcell_id station_id,
+        mmw.workcell_code station_code,
+        mmw.workcell_name station_name
+        from hme_service_receive ser,
+        hme_logistics_info hli,
+        hme_service_data_record sedr,
+        hme_service_data_record_line sedrl,
+        mt_tag_group mtg,
+        mt_tag_group_tl mtgt,
+        mt_tag mt,
+        mt_tag_tl mtl,
+        iam_user iu,
+        mt_mod_workcell mmw,
+        mt_material mm,
+        mt_material_site mms
+        left join mt_material_site_attr mmsa on mmsa.material_Site_id = mms.material_site_id
+        and mmsa.attr_name = 'attribute5'
+        where ser.material_id = mm.material_id
+        and mm.material_id = mms.material_id
+        and ser.logistics_info_id = hli.logistics_info_id
+        and ser.service_receive_id = sedr.service_receive_id
+        and sedr.service_data_record_id = sedrl.service_data_record_id
+        and mtg.tag_group_id = sedr.tag_group_id
+        and mtgt.tag_group_id = mtg.tag_group_id
+        and mt.tag_id = sedrl.tag_id
+        and mt.tag_id = mtl.tag_id
+        and mtl.LANG = #{locale}
+        and mtgt.LANG = #{locale}
+        and sedr.business_type = 'AF_CHOOSE'
+        and sedrl.result = 'Y'
+        and mmw.WORKCELL_ID = sedr.workcell_id
+        and iu.id = sedr.last_updated_by
+        and ser.tenant_id = #{tenantId}
+        and mms.site_id = #{dto.siteId}
+        <if test="dto.snNum != null">
+            and ser.sn_num in
+            <foreach collection="dto.snNums" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.materialCode != null">
+            and mm.material_code in
+            <foreach collection="dto.materialCodes" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.machineType != null">
+            <bind name="machineTypeLike" value="'%'+dto.machineType+'%'"/>
+            and mmsa.attr_value like #{machineTypeLike}
+        </if>
+        <if test="dto.logistics != null">
+            and hli.logistics_company = #{dto.logistics}
+        </if>
+        <if test="dto.logisticsNumber != null">
+            <bind name="logisticsNumberLike" value="'%'+dto.logisticsNumber+'%'"/>
+            and hli.logistics_number like #{logisticsNumberLike}
+        </if>
+        <if test="dto.batchNumber != null">
+            <bind name="batchNumberLike" value="'%'+dto.batchNumber+'%'"/>
+            and hli.batch_number like #{batchNumberLike}
+        </if>
+        <if test="dto.tagGroupCode != null">
+            and mtg.tag_group_code in
+            <foreach collection="dto.tagGroupCodes" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.receiveStatus != null">
+            and ser.receive_status = #{dto.receiveStatus}
+        </if>
+        <if test="dto.receiptDateFrom != null">
+            and hli.creation_date &gt;= #{dto.receiptDateFrom}
+        </if>
+        <if test="dto.receiptDateTo != null">
+            and hli.creation_date &lt;= #{dto.receiptDateTo}
+        </if>
+        <if test="dto.splitDateFrom != null">
+            and ser.receive_date &gt;= #{dto.splitDateFrom}
+        </if>
+        <if test="dto.splitDateTo != null">
+            and ser.receive_date &lt;= #{dto.splitDateTo}
+        </if>
+        <if test="dto.lastUpdateDateFrom != null">
+            and sedr.last_update_date &gt;= #{dto.lastUpdateDateFrom}
+        </if>
+        <if test="dto.lastUpdateDateTo != null">
+            and sedr.last_update_date &lt;= #{dto.lastUpdateDateTo}
+        </if>
+        order by split_date;
+
+    </select>
+
+</mapper>

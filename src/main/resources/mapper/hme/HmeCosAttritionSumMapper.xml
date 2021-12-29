@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosAttritionSumMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.HmeCosAttritionSumDTO">
+        select wo.work_order_id
+        , wo.work_order_num
+        , wo.status work_order_status
+        , wo.production_version
+        , ifnull(woa_pvd.attr_value, '') production_version_description
+        , wo.work_order_type
+        , wo.material_id assembly_material_id
+        , ass.material_code assembly_material_code
+        , ass.material_name assembly_material_name
+        , wo.qty wo_quantity
+        , ifnull(mwoa.completed_qty, 0) completed_quantity
+        , wo.production_line_id as prod_line_id
+        , mpl.prod_line_name
+        , mpl.prod_line_code
+        , mbc.bom_component_id
+        , mbc.bom_component_id source_bom_component_id
+        , mbc.line_number bom_line_number
+        , mbc.material_id component_material_id
+        , mm_c.material_code component_material_code
+        , mm_c.material_name component_material_name
+        , ifnull(mbc.qty,0) usage_qty
+        , mm_c.primary_uom_id as uom_id
+        , uom.uom_name
+        , ifnull(mbca_dq.attr_value + 0, 0) demand_quantity
+        , ifnull(mbc.attrition_chance, 0) as attrition_chance
+        , ifnull(mbca_al.attr_value + 0, 0) attrition_limit
+        , ifnull(sum(woca.assemble_qty), 0) + ifnull(sum(woca.scrapped_qty), 0) assembly_quantity
+        , null bom_substitute_group
+        , null global_substitute_group
+        , 0 material_nc_scrap_qty
+        , wo.PLAN_START_TIME
+        ,'BOM' source_type
+        , 0 pending_nc_quantity
+        from mt_work_order wo
+        join mt_bom_component mbc on wo.bom_id = mbc.BOM_ID and wo.tenant_id = mbc.tenant_id
+        left join mt_work_order_attr woa_pvd
+        on woa_pvd.WORK_ORDER_ID = wo.WORK_ORDER_ID and woa_pvd.ATTR_NAME = 'attribute11'
+        left join mt_work_order_actual mwoa
+        on mwoa.WORK_ORDER_ID = wo.WORK_ORDER_ID and wo.TENANT_ID = mwoa.TENANT_ID
+        left join mt_work_order_component_actual woca on woca.work_order_id = wo.work_order_id
+        and woca.bom_component_id = mbc.bom_component_id
+        left join mt_bom_component_attr mbca_dq
+        on mbca_dq.BOM_COMPONENT_ID = mbc.BOM_COMPONENT_ID and
+        mbca_dq.ATTR_NAME = 'lineAttribute5'
+        left join mt_bom_component_attr mbca_al
+        on mbca_al.BOM_COMPONENT_ID = mbc.BOM_COMPONENT_ID and
+        mbca_al.ATTR_NAME = 'lineAttribute23'
+        , mt_material mm_c
+        , mt_uom uom
+        , mt_material ass
+        , mt_mod_production_line mpl
+        where wo.MATERIAL_ID = ass.MATERIAL_ID
+        and wo.PRODUCTION_LINE_ID = mpl.PROD_LINE_ID
+        and mm_c.PRIMARY_UOM_ID = uom.UOM_ID
+        and mbc.MATERIAL_ID = mm_c.MATERIAL_ID
+        and mbc.qty >= 0
+        and wo.TENANT_ID = #{tenantId}
+        <if test="dto.prodLineIds != null">
+            and wo.production_line_id in
+            <foreach collection="dto.prodLineIdList" separator="," item="id" open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNums != null">
+            and wo.work_order_num in
+            <foreach collection="dto.workOrderNumList" separator="," item="id" open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.woStatuses != null">
+            and wo.status in
+            <foreach collection="dto.woStatusList" separator="," item="id" open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.assemblyMaterialIds != null">
+            and wo.material_id in
+            <foreach collection="dto.assemblyMaterialIdList" separator="," item="id" open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.bomVersion != null">
+            and wo.production_version= #{dto.bomVersion}
+        </if>
+        <if test="dto.componentMaterialIds != null">
+            and mbc.material_id in
+            <foreach collection="dto.componentMaterialIdList" separator="," item="id" open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.planStartTimeFrom != null">
+            and wo.plan_start_time &gt;= #{dto.planStartTimeFrom}
+        </if>
+        <if test="dto.planStartTimeTo != null">
+            and wo.plan_start_time &lt;= #{dto.planStartTimeTo}
+        </if>
+        group by wo.work_order_id
+        , ifnull(woa_pvd.attr_value, '')
+        , mbc.bom_component_id
+        , ifnull(mbca_dq.attr_value + 0, 0)
+        , ifnull(mbc.attrition_chance, 0)
+        , ifnull(mbca_al.attr_value + 0, 0)
+        order by work_order_id
+        ,PLAN_START_TIME desc
+        , bom_line_number
+    </select>
+
+    <select id="processNcScrapGet" resultType="com.ruike.hme.domain.vo.HmeCosAttritionSumVO">
+        SELECT
+        	cnr.work_order_id,
+            mor2.PARENT_ORGANIZATION_ID LINE_WORKCELL_ID,
+            mml.MATERIAL_ID,
+            COUNT(hcs.COS_SCRAP_ID) DEFECT_COUNT
+        FROM
+        	hme_cos_nc_record cnr
+        	LEFT JOIN mt_mod_organization_rel mor ON mor.TOP_SITE_ID = #{siteId} AND mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL' AND mor.ORGANIZATION_TYPE = 'WORKCELL' AND mor.ORGANIZATION_ID = cnr.WORKCELL_ID AND mor.tenant_id = #{tenantId}
+        	LEFT JOIN mt_mod_organization_rel mor2 ON mor2.TOP_SITE_ID = #{siteId} AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL' AND mor2.ORGANIZATION_TYPE = 'WORKCELL' AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID AND mor2.TENANT_ID = #{tenantId},
+        	mt_material_lot mml,
+        	hme_cos_scrap hcs
+        WHERE
+            cnr.tenant_id = #{tenantId}
+        AND (cnr.work_order_id, mor2.PARENT_ORGANIZATION_ID, mml.MATERIAL_ID) IN
+        <foreach collection="dtoList" item="item" index=" index" open="(" close=")" separator=",">
+            (#{item.workOrderId}, #{item.workcellId}, #{item.componentMaterialId})
+        </foreach>
+        AND mml.MATERIAL_LOT_ID = cnr.material_lot_id
+        AND hcs.load_sequence = cnr.load_sequence
+        AND hcs.tenant_id = cnr.tenant_id
+        GROUP BY
+            cnr.work_order_id,
+            mor2.PARENT_ORGANIZATION_ID,
+            mml.MATERIAL_ID
+    </select>
+
+    <select id="processNcScrapGet2" resultType="com.ruike.hme.domain.vo.HmeCosAttritionSumVO">
+        SELECT
+        	woc.WORK_ORDER_ID,
+        	woc.MATERIAL_ID,
+        	woc.BOM_COMPONENT_ID,
+        	woc.SCRAPPED_QTY defectCount
+        FROM
+        	mt_work_order_component_actual woc
+        WHERE woc.TENANT_ID = #{tenantId}
+        AND (woc.WORK_ORDER_ID, woc.MATERIAL_ID) IN
+        <foreach collection="dtoList" item="item" index="index" open="(" close=")" separator=",">
+            (#{item.workOrderId}, #{item.componentMaterialId})
+        </foreach>
+    </select>
+
+    <select id="queryNcQuantity" resultType="com.ruike.hme.domain.vo.HmeCosAttritionSumVO">
+        SELECT
+        cnr.work_order_id,
+        mor2.PARENT_ORGANIZATION_ID LINE_WORKCELL_ID,
+        mml.MATERIAL_ID,
+        cnr.load_sequence,
+        cnr.defect_count DEFECT_COUNT
+        FROM
+        hme_cos_nc_record cnr
+        LEFT JOIN mt_mod_organization_rel mor ON mor.TOP_SITE_ID = #{siteId} AND mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL' AND mor.ORGANIZATION_TYPE = 'WORKCELL' AND mor.ORGANIZATION_ID = cnr.WORKCELL_ID AND mor.tenant_id = #{tenantId}
+        LEFT JOIN mt_mod_organization_rel mor2 ON mor2.TOP_SITE_ID = #{siteId} AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL' AND mor2.ORGANIZATION_TYPE = 'WORKCELL' AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID AND mor2.TENANT_ID = #{tenantId},
+        mt_material_lot mml
+        WHERE
+        cnr.tenant_id = #{tenantId}
+        AND cnr.status = 'Y'
+        AND (cnr.work_order_id, mor2.PARENT_ORGANIZATION_ID, mml.MATERIAL_ID) IN
+        <foreach collection="dtoList" item="item" index=" index" open="(" close=")" separator=",">
+            (#{item.workOrderId}, #{item.workcellId}, #{item.componentMaterialId})
+        </foreach>
+        AND mml.MATERIAL_LOT_ID = cnr.material_lot_id
+    </select>
+
+    <select id="queryLineWorkcellByBomComponentIdAndProdLineId" resultType="com.ruike.hme.domain.vo.BomComponentWorkcellVO">
+        SELECT
+        owdr.WORKCELL_ID PROCESS_ID,
+        mor2.ORGANIZATION_ID WORKCELL_ID,
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME,
+        mroc.BOM_COMPONENT_ID,
+        mor2.PARENT_ORGANIZATION_ID PROD_LINE_ID,
+        owdr.PRIORITY
+        FROM
+        mt_router_operation_component mroc,
+        mt_operation_wkc_dispatch_rel owdr,
+        mt_router_operation mro,
+        mt_mod_organization_rel mor,
+        mt_mod_organization_rel mor2,
+        mt_mod_workcell mmw
+        WHERE
+        mroc.tenant_id = #{tenantId}
+        AND (mroc.BOM_COMPONENT_ID, mor2.PARENT_ORGANIZATION_ID) IN
+        <foreach collection="dtoList" item="item" index="index" open="(" close=")" separator=",">
+            (#{item.bomComponentId},#{item.prodLineId})
+        </foreach>
+        AND owdr.OPERATION_ID = mro.OPERATION_ID
+        AND mro.ROUTER_OPERATION_ID = mroc.ROUTER_OPERATION_ID
+        AND mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID = owdr.WORKCELL_ID
+        AND mor.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = #{tenantId}
+        AND mmw.WORKCELL_ID = mor2.ORGANIZATION_ID
+    </select>
+</mapper>

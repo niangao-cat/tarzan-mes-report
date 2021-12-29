@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeLoadJobMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.representation.HmeLoadJobRept">
+        select hlj.load_job_id,
+        hlj.load_sequence,
+        hlj.load_job_type,
+        hlj.material_id,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        hlj.material_lot_id,
+        mml.MATERIAL_LOT_CODE,
+        hlj.load_row,
+        hlj.load_column,
+        hlj.source_material_lot_id,
+        mml_sou.MATERIAL_LOT_CODE as source_material_lot_code,
+        hlj.source_load_row,
+        hlj.source_load_column,
+        hlj.hot_sink_code,
+        hlj.status,
+        mo.description operation_description,
+        hlj.workcell_id,
+        wkc_st.workcell_code workcell_station_code,
+        wkc_st.workcell_name workcell_station_name,
+        mpl.prod_line_name,
+        hlj.work_order_id,
+        mwo.work_order_num,
+        mwo.PRODUCTION_VERSION,
+        woa.ATTR_VALUE production_version_description,
+        hlj.wafer_num,
+        hlj.cos_type,
+        hlj.remark,
+        hlj.bom_material_id,
+        mm_bom.MATERIAL_CODE as bom_material_code,
+        hlj.bom_material_lot_id,
+        mml_bom.MATERIAL_LOT_CODE as bom_material_lot_code,
+        mmlab_sl.ATTR_VALUE supplier_lot,
+        hlj.bom_material_lot_supplier,
+        ms.SUPPLIER_CODE,
+        ms.SUPPLIER_NAME,
+        hmll.ATTRIBUTE13 au_sn_rate,
+        hmll.ATTRIBUTE10 machine_code,
+        iu.real_name createdByName,
+        hlj.creation_date,
+        iu2.real_name last_update_by_name,
+        hlj.last_update_date
+        from hme_load_job hlj
+        left join mt_material mm on mm.MATERIAL_ID = hlj.material_id
+        left join mt_material_lot mml on mml.MATERIAL_LOT_ID = hlj.material_lot_id
+        left join mt_material_lot mml_sou on mml_sou.MATERIAL_LOT_ID = hlj.source_material_lot_id
+        left join mt_operation mo on mo.OPERATION_ID = hlj.operation_id
+        left join mt_mod_workcell wkc_st on wkc_st.WORKCELL_ID = hlj.workcell_id
+        left join mt_work_order mwo on mwo.WORK_ORDER_ID = hlj.work_order_id
+        join mt_mod_production_line mpl on mpl.PROD_LINE_ID = mwo.production_line_id
+        left join mt_work_order_attr woa on woa.work_order_id = mwo.work_order_id and woa.attr_name = 'ATTRIBUTE11'
+        left join mt_material mm_bom on mm_bom.MATERIAL_ID = hlj.bom_material_id
+        left join mt_material_lot mml_bom on mml_bom.MATERIAL_LOT_ID = hlj.bom_material_lot_id
+        left join mt_material_lot_attr mmlab_sl on mml_bom.MATERIAL_LOT_ID = mmlab_sl.MATERIAL_LOT_ID
+        and mmlab_sl.ATTR_NAME = 'SUPPLIER_LOT'
+        left join mt_supplier ms on ms.SUPPLIER_ID = hlj.bom_material_lot_supplier
+        inner join hme_material_lot_load hmll on hlj.tenant_id = hmll.tenant_id and hlj.load_sequence =
+        hmll.load_sequence
+        inner join iam_user iu on hlj.created_by = iu.id
+        inner join iam_user iu2 on hlj.last_updated_by = iu2.id
+        where hlj.tenant_id = #{tenantId}
+        <if test="dto.loadJobType != null and dto.loadJobType != ''">
+            and hlj.load_job_type = #{dto.loadJobType}
+        </if>
+        <if test="dto.status != null and dto.status != ''">
+            and hlj.status = #{dto.status}
+        </if>
+        <if test="dto.operationId != null and dto.operationId != ''">
+            and hlj.operation_id = #{dto.operationId}
+        </if>
+        <if test="dto.cosType != null and dto.cosType != ''">
+            and hlj.cos_type = #{dto.cosType}
+        </if>
+        <if test="dto.bomMaterialLotCode != null and dto.bomMaterialLotCode != ''">
+            and mml_bom.MATERIAL_LOT_CODE LIKE CONCAT(#{dto.bomMaterialLotCode},'%')
+        </if>
+        <if test="dto.id != null and dto.id != ''">
+            and iu.id = #{dto.id}
+        </if>
+        <if test="dto.creationDateFrom != null and dto.creationDateFrom != ''">
+            and hlj.creation_date &gt;= #{dto.creationDateFrom}
+        </if>
+        <if test="dto.creationDateTo != null and dto.creationDateTo != ''">
+            and hlj.creation_date &lt;= #{dto.creationDateTo}
+        </if>
+        <if test="dto.materialCode!=null">
+            and mm.MATERIAL_CODE in
+            <foreach collection="dto.materialCodeList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCode!=null">
+            and mml.MATERIAL_LOT_CODE in
+            <foreach collection="dto.materialLotCodeList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.hotSinkCode!=null">
+            and hlj.hot_sink_code in
+            <foreach collection="dto.hotSinkCodeList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.wafer!=null">
+            and hlj.wafer_num in
+            <foreach collection="dto.waferList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.workNum!=null">
+            and mwo.WORK_ORDER_NUM in
+            <foreach collection="dto.workNumList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null">
+            and mwo.production_line_id IN
+            <foreach collection="dto.prodLineIdList" item="id" separator="," open="(" close=")">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.workcellStationIdList != null and dto.workcellStationIdList.size()>0">
+            and hlj.workcell_id in
+            <foreach collection="dto.workcellStationIdList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+        </if>
+        <if test="dto.labCode != null">
+            and exists (select 1
+            from hme_material_lot_lab_code mllc
+            where mllc.material_lot_id = hlj.material_lot_id
+            and mllc.load_sequence = hlj.load_sequence
+            and mllc.lab_code in
+            <foreach collection="dto.labCodeList" item="id" open="(" close=")" separator=",">
+                #{id}
+            </foreach>
+            )
+        </if>
+    </select>
+
+    <select id="selectNcList" resultType="com.ruike.hme.domain.vo.LoadJobNcVO">
+        select hljo.load_job_id
+        ,mnc.NC_CODE
+        ,mnc.DESCRIPTION NC_CODE_DESCRIPTION
+        from hme_load_job_object hljo,
+        mt_nc_code mnc
+        where hljo.tenant_id = #{tenantId}
+        and hljo.load_job_id in
+        <foreach collection="loadJobIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        and hljo.object_type = 'NC'
+        and mnc.NC_CODE_ID = hljo.object_id
+    </select>
+
+    <select id="selectEquipmentList" resultType="com.ruike.hme.domain.vo.LoadJobEquipmentVO">
+        select hljo.load_job_id
+        ,he.asset_encoding
+        ,he.descriptions as asset_name
+        from hme_load_job_object hljo,
+        hme_equipment he
+        where hljo.tenant_id = #{tenantId}
+        and hljo.load_job_id in
+        <foreach collection="loadJobIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        and hljo.object_type = 'EQUIPMENT'
+        and he.EQUIPMENT_ID = hljo.object_id
+    </select>
+
+    <select id="selectLabCodeList" resultType="com.ruike.hme.domain.vo.MaterialLotLabCodeVO">
+        select material_lot_id
+        ,lab_code
+        from hme_material_lot_lab_code
+        where material_lot_id in
+        <foreach collection="materialLotIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        and tenant_id = #{tenantId}
+    </select>
+
+    <select id="qeuryProcessLineByWorkcell" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO2">
+        SELECT
+        mor.ORGANIZATION_ID WORKCELL_ID,
+        mor.PARENT_ORGANIZATION_ID PROCESS_ID,
+        mmp.WORKCELL_NAME PROCESS_NAME,
+        mor2.PARENT_ORGANIZATION_ID LINE_WORKCELL_ID,
+        mml.WORKCELL_NAME LINE_WORKCELL_NAME
+        FROM
+        mt_mod_organization_rel mor,
+        mt_mod_organization_rel mor2,
+        mt_mod_workcell mmp,
+        mt_mod_workcell mml
+        WHERE mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID IN
+        <foreach collection="workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor.TENANT_ID
+        AND mmp.WORKCELL_ID = mor.PARENT_ORGANIZATION_ID
+        AND mml.WORKCELL_ID = mor2.PARENT_ORGANIZATION_ID
+    </select>
+    <select id="gpSelectLabCodeList" resultType="com.ruike.hme.domain.vo.MaterialLotLabCodeVO">
+        select material_lot_id
+        ,lab_code
+        from rk_dev.hme_material_lot_lab_code
+        where material_lot_id in
+        <foreach collection="materialLotIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        and tenant_id = #{tenantId}
+    </select>
+
+    <select id="selectLabCodeListByMaterialLotIdAndLoadSequence" resultType="com.ruike.hme.domain.vo.MaterialLotLabCodeVO">
+        select material_lot_id,
+        load_sequence
+        ,lab_code
+        from hme_material_lot_lab_code
+        where
+        (material_lot_id, load_sequence) IN
+        <foreach collection="dtoList" item="dto" open="(" close=")" separator=",">
+            (#{dto.materialLotId}, #{dto.loadSequence})
+        </foreach>
+        and tenant_id = #{tenantId}
+    </select>
+
+</mapper>

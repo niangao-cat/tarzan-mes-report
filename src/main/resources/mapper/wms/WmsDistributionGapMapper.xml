@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.wms.infra.mapper.WmsDistributionGapMapper">
+
+
+    <select id="selectDelivery" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO">
+		SELECT
+		mcs.SHIFT_CODE,
+		hwdr.PROD_LINE_ID,
+		mmpl.PROD_LINE_NAME,
+		hwdr.WORKCELL_ID,
+		mmw.WORKCELL_CODE,
+		mmw.WORKCELL_NAME,
+		wcdr.material_id,
+		mm.MATERIAL_CODE,
+		left(mm.MATERIAL_NAME, 10) MATERIAL_NAME,
+		IFNULL(wcdr.material_version, '') MATERIAL_VERSION
+		FROM
+		mt_calendar_shift mcs
+		JOIN hme_wo_dispatch_recode hwdr ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+		JOIN wms_component_demand_record wcdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+		JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+		JOIN mt_mod_production_line mmpl ON mmpl.PROD_LINE_ID = hwdr.PROD_LINE_ID
+		JOIN mt_mod_workcell mmw ON mmw.WORKCELL_ID = hwdr.WORKCELL_ID
+		JOIN mt_material mm ON mm.MATERIAL_ID = wcdr.MATERIAL_ID
+		WHERE
+		1 = 1
+		AND (
+		mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+		OR mcs.SHIFT_DATE = DATE_FORMAT( NOW( ), '%Y-%m-%d' )
+		)
+		<if test="prodLineIdList != null and prodLineIdList.size() > 0">
+			AND hwdr.PROD_LINE_ID IN
+			<foreach collection="prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		GROUP BY
+		mcs.SHIFT_CODE,
+		hwdr.PROD_LINE_ID,
+		mmpl.PROD_LINE_NAME,
+		hwdr.WORKCELL_ID,
+		mmw.WORKCELL_CODE,
+		mmw.WORKCELL_NAME,
+		wcdr.material_id,
+		mm.MATERIAL_CODE,
+		mm.MATERIAL_NAME,
+		IFNULL(wcdr.material_version, '')
+    </select>
+
+
+	<select id="selectLotQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO2">
+		SELECT
+			MM.MATERIAL_CODE,
+			attr2.ATTR_VALUE material_version,
+			loc.LOCATOR_TYPE,
+			mml.FREEZE_FLAG,
+			sum( PRIMARY_UOM_QTY ) qty
+		FROM
+			mt_material_lot mml
+			JOIN mt_material MM ON MM.MATERIAL_ID = mml.MATERIAL_ID
+			JOIN mt_mod_locator loc ON mml.LOCATOR_ID = loc.LOCATOR_ID
+		    JOIN mt_mod_locator locp ON loc.PARENT_LOCATOR_ID = locp.LOCATOR_ID
+		    LEFT JOIN mt_material_lot_attr attr ON attr.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+			AND attr.ATTR_NAME = 'MF_FLAG'
+			LEFT JOIN mt_material_lot_attr attr2 ON attr2.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+			AND attr2.ATTR_NAME = 'MATERIAL_VERSION'
+		WHERE
+			mml.ENABLE_FLAG = 'Y'
+		    AND (attr.ATTR_VALUE != 'Y' or attr.ATTR_VALUE is null)
+			<if test="locatorCodeList != null and locatorCodeList.size() > 0">
+				AND locp.LOCATOR_CODE in
+				<foreach collection="locatorCodeList" item="code" separator="," open="(" close=")">
+					#{code}
+				</foreach>
+			</if>
+		GROUP BY
+			MM.MATERIAL_CODE,
+			attr2.ATTR_VALUE,
+			loc.LOCATOR_TYPE,
+			mml.FREEZE_FLAG
+	</select>
+
+	<select id="selectShiftTime" resultType="java.math.BigDecimal">
+		SELECT
+			ROUND( ( UNIX_TIMESTAMP( min( mcs.SHIFT_START_TIME ) ) - UNIX_TIMESTAMP( NOW( ) ) ) / ( 60 * 60 ), 2 )
+		FROM
+			mt_calendar_shift mcs
+		WHERE
+			mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+	</select>
+
+	<select id="queryCurrentDemandQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO4">
+		SELECT
+			IFNULL(SUM( wcdr.requirement_quantity ), 0) qty,
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+		FROM
+			wms_component_demand_record wcdr
+		JOIN hme_wo_dispatch_recode hwdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+		JOIN mt_calendar_shift mcs ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+		WHERE
+			1 = 1
+		AND (mcs.shift_code, hwdr.workcell_id, wcdr.material_id, IFNULL(wcdr.material_version, ''))
+		IN
+		<foreach collection="resultList" item="item" index="index" open="(" close=")" separator=",">
+			(#{item.shiftCode}, #{item.workcellId}, #{item.materialId}, #{item.materialVersion})
+		</foreach>
+		AND mcs.SHIFT_DATE = DATE_FORMAT( NOW( ), '%Y-%m-%d' )
+		GROUP BY
+		mcs.shift_code,
+		hwdr.workcell_id,
+		wcdr.material_id,
+		wcdr.material_version
+	</select>
+
+	<select id="queryCurrentDeliveryQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO4">
+		SELECT
+			IFNULL(SUM( attr.ATTR_VALUE ),0) qty,
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+		FROM
+			wms_component_demand_record wcdr
+			JOIN hme_wo_dispatch_recode hwdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+			JOIN mt_calendar_shift mcs ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+			JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+			JOIN mt_instruction_attr attr ON attr.INSTRUCTION_ID = wddd.instruction_id
+			AND attr.ATTR_NAME = 'SIGNED_QTY'
+		WHERE
+		1 = 1
+		AND (mcs.shift_code, hwdr.workcell_id, wcdr.material_id, IFNULL(wcdr.material_version, ''))
+		IN
+		<foreach collection="resultList" item="item" index="index" open="(" close=")" separator=",">
+			(#{item.shiftCode}, #{item.workcellId}, #{item.materialId}, #{item.materialVersion})
+		</foreach>
+		AND mcs.SHIFT_DATE = DATE_FORMAT( NOW( ), '%Y-%m-%d' )
+		GROUP BY
+		mcs.shift_code,
+		hwdr.workcell_id,
+		wcdr.material_id,
+		wcdr.material_version
+	</select>
+
+	<select id="queryNextDemandQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO4">
+		SELECT
+			IFNULL(SUM( wcdr.requirement_quantity ), 0) qty,
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+		FROM
+			wms_component_demand_record wcdr
+			JOIN hme_wo_dispatch_recode hwdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+			JOIN mt_calendar_shift mcs ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+		WHERE
+			1 = 1
+		AND (mcs.shift_code, hwdr.workcell_id, wcdr.material_id, IFNULL(wcdr.material_version, ''))
+		IN
+		<foreach collection="resultList" item="item" index="index" open="(" close=")" separator=",">
+			(#{item.shiftCode}, #{item.workcellId}, #{item.materialId}, #{item.materialVersion})
+		</foreach>
+		AND mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+		GROUP BY
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+	</select>
+
+	<select id="queryNextDeliveryQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO4">
+		SELECT
+			IFNULL(SUM( attr.ATTR_VALUE ), 0) qty,
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+		FROM
+			wms_component_demand_record wcdr
+			JOIN hme_wo_dispatch_recode hwdr ON hwdr.WO_DISPATCH_ID = wcdr.wo_dispatch_id
+			JOIN mt_calendar_shift mcs ON mcs.CALENDAR_SHIFT_ID = hwdr.CALENDAR_SHIFT_ID
+			JOIN wms_distribution_demand_detail wddd ON wddd.demand_record_id = wcdr.demand_record_id
+			JOIN mt_instruction_attr attr ON attr.INSTRUCTION_ID = wddd.instruction_id
+			AND attr.ATTR_NAME = 'SIGNED_QTY'
+		WHERE
+			1 = 1
+			AND (mcs.shift_code, hwdr.workcell_id, wcdr.material_id, IFNULL(wcdr.material_version, ''))
+			IN
+			<foreach collection="resultList" item="item" index="index" open="(" close=")" separator=",">
+				(#{item.shiftCode}, #{item.workcellId}, #{item.materialId}, #{item.materialVersion})
+			</foreach>
+			AND mcs.SHIFT_DATE = DATE_FORMAT( DATE_ADD( NOW( ), INTERVAL 1 DAY ), '%Y-%m-%d' )
+			GROUP BY
+			mcs.shift_code,
+			hwdr.workcell_id,
+			wcdr.material_id,
+			wcdr.material_version
+	</select>
+
+	<select id="queryLineNotLimitQty" resultType="com.ruike.wms.api.dto.WmsDistributionGapDTO4">
+		SELECT
+			IFNULL(sum( PRIMARY_UOM_QTY ), 0) qty,
+			mml.MATERIAL_ID,
+			lor.ORGANIZATION_ID,
+			IFNULL( attr2.ATTR_VALUE, '' )
+		FROM
+			mt_material_lot mml
+			LEFT JOIN mt_material_lot_attr attr ON attr.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+			AND attr.ATTR_NAME = 'MF_FLAG'
+			LEFT JOIN mt_material_lot_attr attr2 ON attr2.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID
+			AND attr2.ATTR_NAME = 'MATERIAL_VERSION'
+			,mt_mod_locator_org_rel lor
+		WHERE
+			mml.ENABLE_FLAG = 'Y'
+		AND (mml.MATERIAL_ID, IFNULL( attr2.ATTR_VALUE, '' ))	IN
+		<foreach collection="resultList" item="item" index="index" open="(" close=")" separator=",">
+			(#{item.materialId}, #{item.materialVersion})
+		</foreach>
+		AND (attr.ATTR_VALUE != 'Y'  or attr.ATTR_VALUE is null)
+		AND lor.ORGANIZATION_TYPE = 'WORKCELL'
+		AND lor.LOCATOR_ID = mml.LOCATOR_ID
+		AND lor.ORGANIZATION_ID IN
+		<foreach collection="workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		GROUP BY
+		mml.MATERIAL_ID,
+		lor.ORGANIZATION_ID,
+		IFNULL( attr2.ATTR_VALUE, '' )
+	</select>
+
+</mapper>

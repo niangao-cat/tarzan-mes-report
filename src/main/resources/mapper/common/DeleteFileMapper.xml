@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.common.infra.mapper.DeleteFileMapper">
+
+    <select id="fileUrlList" resultType="java.lang.String">
+        select file_url from HFLE_FILE
+        where TENANT_ID=#{tenantId}
+        and  bucket_name = #{bucketName}
+        and directory = #{directory}
+        <if test="fileTypeList != null and fileTypeList.size() != 0">
+            and file_type in
+            <foreach collection="fileTypeList" item="fileType" separator="," open="(" close=")" index="index">
+                #{fileType}
+            </foreach>
+        </if>
+        and last_update_date &lt; DATE_FORMAT(DATE_SUB(NOW(),INTERVAL 3 month),'%Y-%m-%d %H:%i:%S')
+    </select>
+</mapper>

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.qms.infra.mapper.QmsProductQualityInspectionMapper">
+
+    <select id="selectOperationId" resultType="java.lang.String">
+        select mo.OPERATION_ID
+        from mt_operation mo
+        where mo.DATE_FROM &lt;= now()
+          and (mo.DATE_TO IS NULL OR mo.DATE_TO &gt;= now())
+          and mo.OPERATION_NAME = #{operationName}
+          and mo.TENANT_ID = #{tenantId}
+          and mo.site_id = #{siteId}
+    </select>
+
+
+    <select id="selectNcEo" resultType="com.ruike.qms.domain.vo.QmsProductQualityInspectionNcEoVO">
+        select mnr.MATERIAL_LOT_ID,
+               mnr.MATERIAL_ID,
+               mnr.EO_ID,
+               mnr.NC_STATUS,
+               mnr.CREATED_BY,
+               mnr.CREATION_DATE,
+               mnr.COMMENTS
+        from mt_nc_record mnr
+        where mnr.TENANT_ID = #{tenantId}
+          and (mnr.COMPONENT_MATERIAL_ID is null or mnr.COMPONENT_MATERIAL_ID = '')
+          and (mnr.PARENT_NC_RECORD_ID is null or mnr.PARENT_NC_RECORD_ID = '')
+          and mnr.CREATION_DATE &gt;= #{startTime}
+          and mnr.CREATION_DATE &lt;= #{endTime}
+          and mnr.ROOT_CAUSE_OPERATION_ID = #{operationId}
+          and mnr.SITE_ID = #{siteId}
+
+        /*group by mnr.EO_ID
+        order by mnr.CREATION_DATE desc*/
+    </select>
+
+    <select id="selectSiteOutEo" resultType="java.lang.String">
+        select hejs.site_out_by
+        from hme_eo_job_sn hejs
+        where hejs.tenant_id = #{tenantId}
+          and hejs.site_out_date is not null
+          and hejs.site_out_date != ''
+          and hejs.site_in_date &gt;= #{creationTime}
+          and hejs.operation_id = #{operationId}
+          and hejs.eo_id = #{eoId}
+    </select>
+
+    <select id="selectAllEo" resultType="com.ruike.qms.domain.vo.QmsProductQualityInspectionEoVO">
+        select hejs.site_out_by, hejs.eo_id
+        from hme_eo_job_sn hejs
+        where hejs.tenant_id = #{tenantId}
+          and hejs.site_out_date != ''
+          and hejs.site_out_date is not null
+          and hejs.site_in_date &gt;= #{startTime}
+          and hejs.site_in_date &lt;= #{endTime}
+          and hejs.operation_id = #{operationId}
+
+    </select>
+
+    <select id="selectEoType" resultType="com.ruike.qms.domain.vo.QmsProductQualityInspectionNcEoVO">
+        select wig.item_group_description,me.EO_ID,wig.item_group_code
+        from mt_eo me
+        join mt_material_site mms on me.MATERIAL_ID = mms.MATERIAL_ID
+        join mt_material_basic mmb
+        on mmb.MATERIAL_SITE_ID = mms.MATERIAL_SITE_ID and mmb.MATERIAL_ID = me.MATERIAL_ID
+        join wms_item_group wig on wig.item_group_code = mmb.ITEM_GROUP
+        where me.TENANT_ID = #{tenantId}
+        and mms.TENANT_ID = #{tenantId}
+        and mmb.TENANT_ID = #{tenantId}
+        and wig.tenant_id = #{tenantId}
+        and mms.SITE_ID = #{siteId}
+        <if test="eoIdList != null and eoIdList.size() > 0">
+            AND me.EO_ID IN
+            <foreach collection="eoIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="selectNcRecord" resultType="com.ruike.qms.domain.vo.QmsProductQualityInspectionNcRecordVO">
+        select me.IDENTIFICATION,
+               mnr.CREATED_BY,
+               mng.DESCRIPTION,
+               mnr.COMMENTS,
+               mnr.CREATION_DATE,
+               me.eo_id
+        from mt_nc_record mnr
+                 join mt_eo me on mnr.EO_ID = me.EO_ID
+                 join mt_nc_group mng on mng.NC_GROUP_ID = mnr.NC_CODE_ID
+        where mnr.TENANT_ID = #{tenantId}
+          and (mnr.COMPONENT_MATERIAL_ID is null or mnr.COMPONENT_MATERIAL_ID = '')
+          and (mnr.PARENT_NC_RECORD_ID is null or mnr.PARENT_NC_RECORD_ID = '')
+          and me.TENANT_ID = #{tenantId}
+          and mng.TENANT_ID = #{tenantId}
+          and mng.SITE_ID = #{siteId}
+          and mnr.CREATION_DATE &gt;= #{startTime}
+          and mnr.CREATION_DATE &lt;= #{endTime}
+          and mnr.ROOT_CAUSE_OPERATION_ID = #{operationId}
+          and mnr.SITE_ID = #{siteId}
+        order by mnr.CREATION_DATE desc
+    </select>
+</mapper>

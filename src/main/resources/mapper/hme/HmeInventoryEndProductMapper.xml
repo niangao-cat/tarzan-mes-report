@@ -1,0 +1,549 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeInventoryEndProductMapper">
+
+	<select id="inventoryEndProductQuery" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO2">
+		<bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+		select
+		  	hssr.split_record_id,
+			hssr.top_split_record_id,
+			hssr.parent_split_record_id,
+			hssr.creation_date,
+			hssr.sn_num,
+			mml.material_lot_code,
+			mml.material_lot_id,
+			mmsa.ATTR_VALUE MATERIAL_MODEL,
+			hssr.work_order_num,
+			mm.material_code,
+			mm.material_name,
+			date_format( hssr.split_time, '%Y-%m-%d %H:%i:%S' ) AS split_time,
+			hssr.split_status,
+			ml_p.locator_code WAREHOUSE_CODE,
+			ml_p.locator_name WAREHOUSE_NAME,
+			ml.locator_code,
+			ml.locator_name,
+			wig.item_group_code,
+			wig.item_group_description,
+			hssr.back_type ,
+			ml_p.LOCATOR_TYPE WAREHOUSE_TYPE,
+			mgtl.DESCRIPTION WAREHOUSE_TYPE_MEANING,
+			mgst.DESCRIPTION WORD_ORDER_STATUS_MEANING,
+			mml.ENABLE_FLAG,
+			IF(IFNULL(mml_mf.ATTR_VALUE,'') != 'Y', 'N', 'Y') MF_FLAG,
+			mml_st.ATTR_VALUE MATERIAL_LOT_CODE_STATUS,
+			date_format(wa.ACTUAL_END_DATE, '%Y-%m-%d %H:%i:%s') ACTUAL_END_DATE,
+			IF(IFNULL(wa.RELEASED_QTY,0)>0,'Y','N') CREATE_SN_FLAG
+		from
+			hme_service_split_record hssr
+			left join mt_work_order wo on wo.work_order_num = hssr.work_order_num and wo.TENANT_ID = hssr.TENANT_ID
+			left join mt_work_order_actual wa on wa.work_order_id = wo.work_order_id
+			left join mt_gen_status mgs on mgs.status_group = 'WO_STATUS' and mgs.status_code = wo.`STATUS`
+			left join mt_gen_status_tl mgst on mgs.gen_status_id = mgst.gen_status_id and mgst.lang = #{lang},
+			mt_material_lot mml
+			left join mt_material_lot_attr mml_mf on mml_mf.material_lot_id = mml.material_lot_id and mml_mf.attr_name = 'MF_FLAG'
+			left join mt_material_lot_attr mml_st on mml_st.material_lot_id = mml.material_lot_id and mml_st.attr_name = 'STATUS',
+			mt_material mm,
+			mt_material_site mms
+			left join mt_material_site_attr mmsa on mmsa.MATERIAL_SITE_ID = mms.MATERIAL_SITE_ID
+			and mmsa.ATTR_NAME = 'attribute5',
+			mt_material_basic mmb
+			left join wms_item_group wig on wig.item_group_code = mmb.item_group,
+			mt_mod_locator ml,
+			mt_mod_locator ml_p
+			left join mt_gen_type mgt on mgt.type_code = ml_p.locator_type  and mgt.type_group = 'LOCATOR_TYPE'
+			left join mt_gen_type_tl mgtl on mgtl.gen_type_id = mgt.gen_type_id and mgtl.lang = #{lang}
+		where
+		    hssr.tenant_id =  #{tenantId}
+		AND hssr.split_record_id = hssr.top_split_record_id
+		AND hssr.material_lot_id = mml.material_lot_id
+		and mm.material_id = mml.material_id
+		and mms.TENANT_ID = hssr.tenant_id
+		and mms.material_id = mm.material_id
+		and mms.site_id = #{dto.siteId}
+		and mmb.material_site_id = mms.material_site_id
+		and ml.locator_id = mml.locator_id
+		and ml.parent_locator_id = ml_p.locator_id
+		<if test="dto.receiveSnNumList != null and dto.receiveSnNumList.size() > 0">
+			AND hssr.sn_num IN
+			<foreach collection="dto.receiveSnNumList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.currentSnNumList != null and dto.currentSnNumList.size() > 0">
+			AND mml.material_lot_code IN
+			<foreach collection="dto.currentSnNumList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+			AND mm.material_code IN
+			<foreach collection="dto.materialCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.splitStatusList != null and dto.splitStatusList.size() > 0">
+			AND hssr.split_status IN
+			<foreach collection="dto.splitStatusList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.warehouseCodeList != null and dto.warehouseCodeList.size() > 0">
+			AND ml.locator_code IN
+			<foreach collection="dto.warehouseCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.itemGroupDescription !=null and dto.itemGroupDescription !=''">
+			AND wig.item_group_description LIKE CONCAT('%', #{dto.itemGroupDescription}, '%')
+		</if>
+		<if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+			AND EXISTS (
+			SELECT
+			1
+			FROM
+			mt_mod_workcell mmw,
+			mt_eo_step_wip sw,
+			mt_eo_step_actual sa,
+			mt_eo_router_actual ra,
+			mt_eo eo,
+			mt_eo_attr ea,
+			mt_material_lot mml
+			WHERE
+			mmw.WORKCELL_ID = sw.WORKCELL_ID
+			AND mmw.WORKCELL_CODE IN
+			<foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+			AND sw.TENANT_ID = sa.TENANT_ID
+			AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+			AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+			AND ra.EO_ID = eo.EO_ID
+			AND eo.STATUS = 'WORKING'
+			AND ea.TENANT_ID = hssr.tenant_id
+			AND eo.EO_ID = ea.EO_ID
+			AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+			AND ea.ATTR_VALUE = mml.MATERIAL_LOT_CODE
+			AND mml.MATERIAL_LOT_ID = hssr.material_lot_id
+			)
+		</if>
+		<if test="dto.wordOrderStatusList != null and dto.wordOrderStatusList.size() > 0">
+			AND wo.STATUS IN
+			<foreach collection="dto.wordOrderStatusList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialLotCodeStatusList != null and dto.materialLotCodeStatusList.size() > 0">
+			AND mml_st.ATTR_VALUE IN
+			<foreach collection="dto.materialLotCodeStatusList" item="item" index="index" open="(" close=")" separator=",">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.warehouseType != null and dto.warehouseType != ''">
+			AND ml_p.LOCATOR_TYPE = #{dto.warehouseType}
+		</if>
+		<if test="dto.createSnFlag != null and dto.createSnFlag != ''">
+			<choose>
+				<when test='dto.createSnFlag == "Y"'>
+					AND IFNULL(wa.RELEASED_QTY,0) > 0
+				</when>
+				<otherwise>
+					AND (
+					wa.RELEASED_QTY is NULL OR
+					wa.RELEASED_QTY = '' OR
+					wa.RELEASED_QTY <![CDATA[<=]]>  0
+					)
+				</otherwise>
+			</choose>
+		</if>
+		<if test="dto.mfFlag != null and dto.mfFlag != ''">
+			<choose>
+				<when test='dto.mfFlag == "Y"'>
+					AND mml_mf.ATTR_VALUE = #{dto.mfFlag}
+				</when>
+				<otherwise>
+					AND (mml_mf.ATTR_VALUE is null OR mml_mf.ATTR_VALUE = '')
+				</otherwise>
+			</choose>
+		</if>
+		<if test="dto.enabledFlag != null and dto.enabledFlag != ''">
+			AND mml.ENABLE_FLAG = #{dto.enabledFlag}
+		</if>
+		<if test="dto.docNumFlag != null and dto.docNumFlag != ''">
+			<choose>
+				<when test='dto.docNumFlag == "N"'>
+				AND EXISTS (SELECT
+					1
+					from
+					mt_instruction_doc mid,
+					mt_instruction mi,
+					mt_instruction_detail midd,
+					mt_material_lot ml
+					where
+						mid.INSTRUCTION_DOC_ID = mi.SOURCE_DOC_ID
+					and mi.INSTRUCTION_ID = midd.INSTRUCTION_ID
+					and ml.material_lot_id = midd.MATERIAL_LOT_ID
+					and ml.ENABLE_FLAG = 'Y'
+					and ml.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID)
+				</when>
+				<when test='dto.docNumFlag == "Y"'>
+					AND NOT EXISTS (SELECT
+					1
+					from
+					mt_instruction_doc mid,
+					mt_instruction mi,
+					mt_instruction_detail midd,
+					mt_material_lot ml
+					where
+					mid.INSTRUCTION_DOC_ID = mi.SOURCE_DOC_ID
+					and mi.INSTRUCTION_ID = midd.INSTRUCTION_ID
+					and ml.material_lot_id = midd.MATERIAL_LOT_ID
+					and ml.ENABLE_FLAG = 'Y'
+					and ml.MATERIAL_LOT_ID = mml.MATERIAL_LOT_ID)
+				</when>
+				<otherwise>
+					1 = 1
+				</otherwise>
+			</choose>
+		</if>
+		<if test="dto.splitTimeFrom != null and dto.splitTimeFrom != ''">
+			AND hssr.split_time >= #{dto.splitTimeFrom}
+		</if>
+		<if test="dto.splitTimeTo != null and dto.splitTimeTo != ''">
+			AND hssr.split_time <![CDATA[<=]]> #{dto.splitTimeTo}
+		</if>
+		<if test="dto.actualEndDateFrom != null and dto.actualEndDateFrom != ''">
+			AND wa.ACTUAL_END_DATE >= #{dto.actualEndDateFrom}
+		</if>
+		<if test="dto.actualEndDateTo != null and dto.actualEndDateTo != ''">
+			AND wa.ACTUAL_END_DATE <![CDATA[<=]]> #{dto.actualEndDateTo}
+		</if>
+	</select>
+
+    <select id="inventoryEndProductExport" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO3">
+		<bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+        select
+			hssr.split_record_id,
+			hssr.top_split_record_id,
+			hssr.parent_split_record_id,
+			hssr.creation_date,
+    	    hssr.sn_num,
+    	    mml.material_lot_code,
+    	    mmsa.ATTR_VALUE MATERIAL_MODEL,
+    	    hssr.work_order_num,
+    	    mm.material_code,
+    	    mm.material_name,
+			date_format( hssr.split_time, '%Y-%m-%d %H:%i:%S' ) AS split_time,
+    	    hssr.split_status,
+    	    ml_p.locator_code WAREHOUSE_CODE,
+    	    ml_p.locator_name WAREHOUSE_NAME,
+    	    ml.locator_code,
+    	    ml.locator_name,
+    	    wig.item_group_code,
+    	    wig.item_group_description,
+			wkc.WORKCELL_CODE,
+			wkc.WORKCELL_NAME,
+			hssp.sn_num SOURCE_SN_NUM,
+			hssr.back_type ,
+			ml_p.LOCATOR_TYPE WAREHOUSE_TYPE,
+			mgtl.DESCRIPTION WAREHOUSE_TYPE_MEANING,
+			mgst.DESCRIPTION WORD_ORDER_STATUS_MEANING,
+			mml.ENABLE_FLAG,
+			mml_mf.ATTR_VALUE MF_FLAG,
+			mml_st.ATTR_VALUE MATERIAL_LOT_CODE_STATUS,
+			date_format(wa.ACTUAL_END_DATE, '%Y-%m-%d %H:%i:%s') ACTUAL_END_DATE,
+			IF(IFNULL(wa.RELEASED_QTY,0)>0,'Y','N') CREATE_SN_FLAG
+        from
+    	    hme_service_split_record hssr
+			left join mt_work_order wo on wo.work_order_num = hssr.work_order_num and wo.TENANT_ID = hssr.TENANT_ID
+			left join mt_work_order_actual wa on wa.work_order_id = wo.work_order_id
+			left join mt_gen_status mgs on mgs.status_group = 'WO_STATUS' and mgs.status_code = wo.`STATUS`
+			left join mt_gen_status_tl mgst on mgs.gen_status_id = mgst.gen_status_id and mgst.lang = #{lang},
+			hme_service_split_record hssp,
+    	    mt_material_lot mml
+			LEFT JOIN (
+			SELECT
+			mmw.WORKCELL_CODE,
+			mmw.WORKCELL_NAME,
+			ea.ATTR_VALUE
+			FROM
+			mt_mod_workcell mmw,
+			mt_eo_step_wip sw,
+			mt_eo_step_actual sa,
+			mt_eo_router_actual ra,
+			mt_eo eo,
+			mt_eo_attr ea
+			WHERE
+			mmw.WORKCELL_ID = sw.WORKCELL_ID
+			<if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+				AND mmw.WORKCELL_CODE IN
+				<foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+					#{item}
+				</foreach>
+			</if>
+			AND sw.TENANT_ID = sa.TENANT_ID
+			AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+			AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+			AND ra.EO_ID = eo.EO_ID
+			AND eo.STATUS = 'WORKING'
+			AND ea.TENANT_ID = #{tenantId}
+			AND eo.EO_ID = ea.EO_ID
+			AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+			) wkc ON wkc.ATTR_VALUE = mml.MATERIAL_LOT_CODE,
+    	    mt_material mm,
+    	    mt_material_site mms
+    	    left join mt_material_site_attr mmsa on mmsa.MATERIAL_SITE_ID = mms.MATERIAL_SITE_ID
+    	    and mmsa.ATTR_NAME = 'attribute5',
+    	    mt_material_basic mmb
+    	    left join wms_item_group wig on wig.item_group_code = mmb.item_group and wig.TENANT_ID = mmb.TENANT_ID,
+    	    mt_mod_locator ml,
+    	    mt_mod_locator ml_p
+        where
+    	    hssr.tenant_id = #{tenantId}
+    	AND hssr.material_lot_id = mml.material_lot_id
+    	and mm.material_id = mml.material_id
+    	and mms.TENANT_ID = hssr.tenant_id
+    	and mms.material_id = mm.material_id
+    	and mms.site_id = #{dto.siteId}
+    	and mmb.material_site_id = mms.material_site_id
+    	and ml.locator_id = mml.locator_id
+    	and ml.parent_locator_id = ml_p.locator_id
+		AND (CASE
+		WHEN hssr.split_record_id = hssr.top_split_record_id  THEN
+		mmb.item_type = 'RK06'
+		ELSE   1=1
+		END)
+		and hssp.split_record_id = hssr.parent_split_record_id
+		<if test="dto.receiveSnNumList != null and dto.receiveSnNumList.size() > 0">
+			AND hssr.sn_num IN
+			<foreach collection="dto.receiveSnNumList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.currentSnNumList != null and dto.currentSnNumList.size() > 0">
+			AND mml.material_lot_code IN
+			<foreach collection="dto.currentSnNumList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.materialCodeList != null and dto.materialCodeList.size() > 0">
+			AND mm.material_code IN
+			<foreach collection="dto.materialCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.splitStatusList != null and dto.splitStatusList.size() > 0">
+			AND hssr.split_status IN
+			<foreach collection="dto.splitStatusList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.warehouseCodeList != null and dto.warehouseCodeList.size() > 0">
+			AND ml.locator_code IN
+			<foreach collection="dto.warehouseCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.workcellCodeList != null and dto.workcellCodeList.size() > 0">
+			AND wkc.WORKCELL_CODE IN
+			<foreach collection="dto.workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		<if test="dto.itemGroupDescription !=null and dto.itemGroupDescription !=''">
+			AND wig.item_group_description LIKE CONCAT('%', #{dto.itemGroupDescription}, '%')
+		</if>
+    </select>
+
+	<select id="queryQtyByParentRecord" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO4">
+		SELECT
+			hssr.split_record_id,
+			COUNT(1) SUB_QTY
+		FROM
+			hme_service_split_record hssr,
+			hme_service_split_record hsst
+		WHERE
+			hssr.tenant_id = #{tenantId}
+		AND hssr.split_record_id = hssr.top_split_record_id
+		AND hsst.tenant_id = hssr.tenant_id
+		AND hsst.top_split_record_id = hssr.split_record_id
+		AND hsst.split_record_id != hsst.top_split_record_id
+		AND hssr.split_record_id IN
+		<foreach collection="parentIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		GROUP BY hssr.split_record_id
+	</select>
+
+	<select id="querySplitRecordByIds" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO3">
+		SELECT
+			hssr.split_record_id,
+			hssr.sn_num
+		FROM
+			hme_service_split_record hssr
+		WHERE
+			hssr.tenant_id = #{tenantId}
+		AND hssr.split_record_id IN
+		<foreach collection="splitRecordIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+	</select>
+
+	<select id="batchQuerySplitWorkcell" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO3">
+		SELECT
+		hssr.split_record_id,
+		mmw.WORKCELL_CODE,
+		mmw.WORKCELL_NAME
+		FROM
+		mt_mod_workcell mmw,
+		mt_eo_step_wip sw,
+		mt_eo_step_actual sa,
+		mt_eo_router_actual ra,
+		mt_eo eo,
+		mt_eo_attr ea,
+		mt_material_lot mml,
+		hme_service_split_record hssr
+		WHERE
+		mmw.WORKCELL_ID = sw.WORKCELL_ID
+		<if test="workcellCodeList != null and workcellCodeList.size() > 0">
+			AND mmw.WORKCELL_CODE IN
+			<foreach collection="workcellCodeList" index="index" item="item" open="(" separator="," close=")">
+				#{item}
+			</foreach>
+		</if>
+		AND sw.TENANT_ID = sa.TENANT_ID
+		AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+		AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+		AND ra.EO_ID = eo.EO_ID
+		AND eo.STATUS = 'WORKING'
+		AND ea.TENANT_ID = hssr.tenant_id
+		AND eo.EO_ID = ea.EO_ID
+		AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+		AND ea.ATTR_VALUE = mml.MATERIAL_LOT_CODE
+		AND mml.MATERIAL_LOT_ID = hssr.material_lot_id
+		AND hssr.split_record_id IN
+		<foreach collection="splitRecordIdList" index="index" item="item" open="(" separator="," close=")">
+			#{item}
+		</foreach>
+	</select>
+
+	<select id="batchQuerySubRecord" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO2">
+		<bind name="lang" value="@io.choerodon.mybatis.helper.LanguageHelper@language()"/>
+		select
+		hssr.split_record_id,
+		hssr.top_split_record_id,
+		hssr.parent_split_record_id,
+		hssr.creation_date,
+		hssr.sn_num,
+		mml.material_lot_code,
+		mml.material_lot_id,
+		mmsa.ATTR_VALUE MATERIAL_MODEL,
+		hssr.work_order_num,
+		mm.material_code,
+		mm.material_name,
+		date_format( hssr.split_time, '%Y-%m-%d %H:%i:%S' ) AS split_time,
+		hssr.split_status,
+		ml_p.locator_code WAREHOUSE_CODE,
+		ml_p.locator_name WAREHOUSE_NAME,
+		ml.locator_code,
+		ml.locator_name,
+		wig.item_group_code,
+		wig.item_group_description,
+		wkc.WORKCELL_CODE,
+		wkc.WORKCELL_NAME,
+		hssp.sn_num SOURCE_SN_NUM,
+		hssr.back_type ,
+		ml_p.LOCATOR_TYPE WAREHOUSE_TYPE,
+		mgtl.DESCRIPTION WAREHOUSE_TYPE_MEANING,
+		mgst.DESCRIPTION WORD_ORDER_STATUS_MEANING,
+		mml.ENABLE_FLAG,
+		IF(IFNULL(mml_mf.ATTR_VALUE,'') != 'Y', 'N', 'Y') MF_FLAG,
+		mml_st.ATTR_VALUE MATERIAL_LOT_CODE_STATUS,
+		date_format(wa.ACTUAL_END_DATE, '%Y-%m-%d %H:%i:%s') ACTUAL_END_DATE,
+		IF(IFNULL(wa.RELEASED_QTY,0)>0,'Y','N') CREATE_SN_FLAG
+		from
+		hme_service_split_record hssr
+		left join mt_work_order wo on wo.work_order_num = hssr.work_order_num and wo.TENANT_ID = hssr.TENANT_ID
+		left join mt_work_order_actual wa on wa.work_order_id = wo.work_order_id
+		left join mt_gen_status mgs on mgs.status_group = 'WO_STATUS' and mgs.status_code = wo.`STATUS`
+		left join mt_gen_status_tl mgst on mgs.gen_status_id = mgst.gen_status_id and mgst.lang = #{lang},
+		hme_service_split_record hssp,
+		mt_material_lot mml
+		left join mt_material_lot_attr mml_mf on mml_mf.material_lot_id = mml.material_lot_id and mml_mf.attr_name = 'MF_FLAG'
+		left join mt_material_lot_attr mml_st on mml_st.material_lot_id = mml.material_lot_id and mml_st.attr_name = 'STATUS'
+		LEFT JOIN (
+		SELECT
+		mmw.WORKCELL_CODE,
+		mmw.WORKCELL_NAME,
+		ea.ATTR_VALUE
+		FROM
+		mt_mod_workcell mmw,
+		mt_eo_step_wip sw,
+		mt_eo_step_actual sa,
+		mt_eo_router_actual ra,
+		mt_eo eo,
+		mt_eo_attr ea
+		WHERE
+		mmw.WORKCELL_ID = sw.WORKCELL_ID
+		AND sw.TENANT_ID = sa.TENANT_ID
+		AND sw.EO_STEP_ACTUAL_ID = sa.EO_STEP_ACTUAL_ID
+		AND sa.EO_ROUTER_ACTUAL_ID = ra.EO_ROUTER_ACTUAL_ID
+		AND ra.EO_ID = eo.EO_ID
+		AND eo.STATUS = 'WORKING'
+		AND ea.TENANT_ID = #{tenantId}
+		AND eo.EO_ID = ea.EO_ID
+		AND ea.ATTR_NAME = 'REWORK_MATERIAL_LOT'
+		) wkc ON wkc.ATTR_VALUE = mml.MATERIAL_LOT_CODE,
+		mt_material mm,
+		mt_material_site mms
+		left join mt_material_site_attr mmsa on mmsa.MATERIAL_SITE_ID = mms.MATERIAL_SITE_ID
+		and mmsa.ATTR_NAME = 'attribute5',
+		mt_material_basic mmb
+		left join wms_item_group wig on wig.item_group_code = mmb.item_group and wig.TENANT_ID = mmb.TENANT_ID,
+		mt_mod_locator ml,
+		mt_mod_locator ml_p
+		left join mt_gen_type mgt on mgt.type_code = ml_p.locator_type  and mgt.type_group = 'LOCATOR_TYPE'
+		left join mt_gen_type_tl mgtl on mgtl.gen_type_id = mgt.gen_type_id and mgtl.lang = #{lang}
+		where
+		hssr.tenant_id = #{tenantId}
+		AND hssr.split_record_id != hssr.top_split_record_id
+		AND hssr.material_lot_id = mml.material_lot_id
+		and mm.material_id = mml.material_id
+		and mms.TENANT_ID = hssr.tenant_id
+		and mms.material_id = mm.material_id
+		and mms.site_id = #{dto.siteId}
+		and mmb.material_site_id = mms.material_site_id
+		and ml.locator_id = mml.locator_id
+		and ml.parent_locator_id = ml_p.locator_id
+		and hssp.split_record_id = hssr.parent_split_record_id
+		AND hssr.top_split_record_id IN
+		<foreach collection="parentIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+	</select>
+
+	<select id="queryDocNumByMaterialLotCodeList" resultType="com.ruike.hme.domain.vo.HmeInventoryEndProductVO5">
+		select
+			mid.INSTRUCTION_DOC_ID,
+			mid.INSTRUCTION_DOC_NUM,
+			ml.MATERIAL_LOT_ID
+		from
+			mt_instruction_doc mid,
+			mt_instruction mi,
+			mt_instruction_detail midd,
+			mt_material_lot ml
+		where
+			1 = 1
+		and ml.material_lot_id IN
+		<foreach collection="materialLotCodeIdList" item="item" index="index" open="(" close=")" separator=",">
+			#{item}
+		</foreach>
+		ANd ml.tenant_id = #{tenantId}
+		AND midd.MATERIAL_LOT_ID = ml.material_lot_id
+		AND midd.tenant_id = ml.tenant_id
+		AND mi.INSTRUCTION_ID = midd.INSTRUCTION_ID
+		AND mid.INSTRUCTION_DOC_ID = mi.SOURCE_DOC_ID
+		AND mid.TENANT_ID = mi.TENANT_ID
+		ORDER BY midd.LAST_UPDATE_DATE DESC
+	</select>
+
+</mapper>

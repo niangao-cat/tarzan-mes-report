@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.wms.infra.mapper.WmsSummaryOfCosBarcodeProcessingMapper">
+
+    <select id="list" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        SELECT
+        hejs.work_order_id,
+        mwo.PRODUCTION_VERSION,
+        mwoa.ATTR_VALUE as PRODUCTION_VERSION_DESC,
+        hejs.job_id,
+        mwo.WORK_ORDER_NUM,
+        mwo.QTY,
+        mmla.ATTR_VALUE WAFER_NUM,
+        mmlac.ATTR_VALUE COS_TYPE,
+        mml.MATERIAL_LOT_CODE,
+        hejs.material_lot_id,
+        hejs.created_by,
+        hejs.workcell_id,
+        substring(mml.MATERIAL_LOT_CODE, 8, 1) SINK_TYPE,
+        iu.real_name REAL_NAME,
+        mmw.WORKCELL_CODE,
+        mmw.WORKCELL_NAME,
+        hejs.creation_date as creation_date,
+        mm.material_code,
+        mm.material_name,
+        hejs.sn_qty,
+        mmpl.PROD_LINE_NAME
+        from hme_eo_job_sn hejs
+        left join mt_work_order mwo on hejs.work_order_id = mwo.work_order_id
+        left join mt_material_lot_attr mmla on hejs.material_lot_id = mmla.material_lot_id
+        and mmla.attr_name = 'WAFER_NUM'
+        left join mt_material_lot_attr mmlac on hejs.material_lot_id = mmlac.material_lot_id
+        and mmlac.attr_name = 'COS_TYPE'
+        left join mt_material_lot mml on hejs.material_lot_id = mml.material_lot_id
+        left join hzero_platform.iam_user iu on hejs.created_by = iu.id
+        left join mt_mod_workcell mmw on hejs.workcell_id = mmw.workcell_id
+        left join mt_material mm on hejs.sn_material_id = mm.material_id
+        left join mt_work_order_attr mwoa on mwoa.WORK_ORDER_ID = hejs.work_order_id and mwoa.ATTR_NAME = 'attribute11'
+        left join mt_mod_production_line mmpl on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        where hejs.tenant_id = #{tenantId}
+        <if test="dto.jobTypes != null and dto.jobTypes.size() > 0">
+            AND hejs.job_type IN
+            <foreach collection="dto.jobTypes" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.creationDateStart != null">
+            and hejs.site_in_date >= DATE_FORMAT(#{dto.creationDateStart}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.creationDateEnd != null">
+            and hejs.site_in_date &lt;= DATE_FORMAT(#{dto.creationDateEnd}, '%Y-%m-%d %T')
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND mmw.workcell_id IN
+            <foreach collection="dto.workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            AND mwo.work_order_num IN
+            <foreach collection="dto.workOrderNumList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+            AND mmlac.attr_value IN
+            <foreach collection="dto.cosTypeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.waferNumList != null and dto.waferNumList.size() > 0">
+            AND mmla.attr_value IN
+            <foreach collection="dto.waferNumList" index="index" item="waferNum" separator="," open="(" close=")">
+                #{waferNum}
+            </foreach>
+        </if>
+        <if test="dto.snMaterialId!=null">
+            AND hejs.sn_material_id = #{dto.snMaterialId}
+        </if>
+        <if test="dto.createdBy!=null">
+            AND hejs.created_by = #{dto.createdBy}
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND mml.material_lot_code IN
+            <foreach collection="dto.materialLotCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.sinkCode!=null or dto.sinkMaterialCodeId != null or dto.sinkSupplierLot != null
+                    or dto.goldCode!=null or dto.goldMaterialId!=null or dto.goldSupplierLot!=null">
+            AND exists (
+            select 1
+            from hme_material_lot_load hmll
+            where hmll.material_lot_id = hejs.material_lot_id
+            and hmll.tenant_id = hejs.tenant_id
+            <if test="dto.sinkCode!=null">
+                and hmll.attribute4 = #{dto.sinkCode}
+            </if>
+            <if test="dto.sinkMaterialCodeIdList != null and dto.sinkMaterialCodeIdList.size() > 0">
+                AND hmll.attribute11 IN
+                <foreach collection="dto.sinkMaterialCodeIdList" item="item" index="index" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="dto.sinkSupplierLot!=null">
+                AND hmll.attribute6 = #{dto.sinkSupplierLot}
+            </if>
+            <if test="dto.goldCode!=null">
+                and hmll.attribute7 = #{dto.goldCode}
+            </if>
+            <if test="dto.goldMaterialIdList != null and dto.goldMaterialIdList.size() > 0">
+                AND hmll.attribute12 IN
+                <foreach collection="dto.goldMaterialIdList" item="item" index="index" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="dto.goldSupplierLot!=null">
+                AND hmll.attribute9 = #{dto.goldSupplierLot}
+            </if>
+            )
+        </if>
+        <if test="dto.labCodeList != null and dto.labCodeList.size() > 0">
+            AND EXISTS (
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.material_lot_id = hejs.material_lot_id
+            and hmllc.tenant_id = hejs.tenant_id
+            AND hmllc.lab_code IN
+            <foreach collection="dto.labCodeList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+            )
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            AND mwo.PRODUCTION_LINE_ID IN
+            <foreach collection="dto.prodLineIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="batchListQueryNg" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        SELECT
+        hcnr.work_order_id,
+        hcnr.wafer_num,
+        hcnr.MATERIAL_LOT_ID,
+        mor.PARENT_ORGANIZATION_ID PROCESS_ID,
+        IFNULL( SUM( hcnr.defect_count ), 0 ) NG_QTY
+        FROM
+        hme_cos_nc_record hcnr
+        LEFT JOIN hme_eo_job_sn hejs ON hejs.job_id = hcnr.job_id
+        LEFT JOIN mt_mod_organization_rel mor ON mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID = hejs.WORKCELL_ID
+        AND mor.TENANT_ID = #{tenantId}
+        WHERE
+        1 = 1
+        AND hcnr.TENANT_ID = #{tenantId}
+        <if test="workOrderIdList != null and workOrderIdList.size() > 0">
+            AND hcnr.work_order_id IN
+            <foreach collection="workOrderIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="waferNumList != null and waferNumList.size() > 0">
+            AND hcnr.wafer_num IN
+            <foreach collection="waferNumList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        <if test="materialLotIdList != null and materialLotIdList.size() > 0">
+            AND hcnr.MATERIAL_LOT_ID IN
+            <foreach collection="materialLotIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        AND EXISTS (
+        SELECT 1 FROM mt_mod_organization_rel mor1
+        WHERE
+        mor1.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor1.PARENT_ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor1.ORGANIZATION_TYPE = 'WORKCELL'
+        <choose>
+            <when test="workcellIdList != null and workcellIdList.size() > 0">
+                AND mor1.ORGANIZATION_ID IN
+                <foreach collection="workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+                    #{item}
+                </foreach>
+            </when>
+            <otherwise>
+                AND 1 = 1
+            </otherwise>
+        </choose>
+        AND mor1.TENANT_ID = #{tenantId}
+        )
+        GROUP BY
+        hcnr.work_order_id,
+        hcnr.wafer_num,
+        hcnr.MATERIAL_LOT_ID,
+        mor.PARENT_ORGANIZATION_ID
+    </select>
+
+    <select id="batchListQueryNgNew" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        SELECT
+        hcnr.work_order_id,
+        hcnr.wafer_num,
+        hcnr.MATERIAL_LOT_ID,
+        mor.PARENT_ORGANIZATION_ID PROCESS_ID,
+        IFNULL( SUM( hcnr.defect_count ), 0 ) NG_QTY
+        FROM
+        hme_cos_nc_record hcnr
+        LEFT JOIN hme_eo_job_sn hejs ON hejs.job_id = hcnr.job_id
+        LEFT JOIN mt_mod_organization_rel mor ON mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID = hejs.WORKCELL_ID
+        AND mor.TENANT_ID = #{tenantId}
+        WHERE hcnr.TENANT_ID = #{tenantId}
+        AND (hcnr.work_order_id, hcnr.wafer_num, hcnr.MATERIAL_LOT_ID, mor.PARENT_ORGANIZATION_ID) in
+        <foreach collection="ngQueryList" separator="," item="item" open="(" close=")">
+            (#{item.workOrderId} , #{item.waferNum} , #{item.materialLotId} , #{item.processId})
+        </foreach>
+        GROUP BY
+        hcnr.work_order_id,
+        hcnr.wafer_num,
+        hcnr.MATERIAL_LOT_ID,
+        mor.PARENT_ORGANIZATION_ID
+    </select>
+
+    <select id="batchListQueryAssetEncoding" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        SELECT
+        heje.job_id,
+        GROUP_CONCAT(
+        DISTINCT (he.ASSET_ENCODING) SEPARATOR '/'
+        ) ASSET_ENCODING
+        FROM
+        hme_eo_job_equipment heje
+        LEFT JOIN hme_equipment he ON heje.equipment_id = he.EQUIPMENT_ID
+        WHERE
+        heje.tenant_id = #{tenantId}
+        <if test="jobIdList != null and jobIdList.size() > 0">
+            AND heje.job_id IN
+            <foreach collection="jobIdList" item="item" index="index" open="(" close=")" separator=",">
+                #{item}
+            </foreach>
+        </if>
+        GROUP BY
+        heje.job_id
+    </select>
+
+    <select id="batchMaterialLotLoadQuery" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        select hmll.material_lot_id, hmll.ATTRIBUTE4 as sinkCode, mm.MATERIAL_CODE as sinkMaterialCode,
+        hmll.ATTRIBUTE6 as sinkSupplierLot, hmll.ATTRIBUTE13 as ausnRatio, hmll.ATTRIBUTE7 as goldCode,
+        mm2.MATERIAL_CODE as goldMaterialCode, hmll.ATTRIBUTE9 as goldSupplierLot
+        from hme_material_lot_load hmll
+        left join mt_material mm on mm.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm2 on mm2.MATERIAL_ID = hmll.ATTRIBUTE12
+        where hmll.material_lot_id in
+        <foreach collection="materialIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and hmll.tenant_id = #{tenantId}
+    </select>
+
+    <select id="qeuryProcessAndLineWorkcellByWorkcell"
+            resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO2">
+        SELECT
+        mor.ORGANIZATION_ID WORKCELL_ID,
+        mor.PARENT_ORGANIZATION_ID PROCESS_ID,
+        mmp.WORKCELL_NAME PROCESS_NAME,
+        mor2.PARENT_ORGANIZATION_ID LINE_WORKCELL_ID,
+        mml.WORKCELL_NAME LINE_WORKCELL_NAME
+        FROM
+        mt_mod_organization_rel mor,
+        mt_mod_organization_rel mor2,
+        mt_mod_workcell mmp,
+        mt_mod_workcell mml
+        WHERE mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID IN
+        <foreach collection="workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor.TENANT_ID
+        AND mmp.WORKCELL_ID = mor.PARENT_ORGANIZATION_ID
+        AND mml.WORKCELL_ID = mor2.PARENT_ORGANIZATION_ID
+    </select>
+
+    <select id="batchLabCodeQuery" resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO">
+        select hmllc.material_lot_id, hmllc.lab_code
+        from hme_material_lot_lab_code hmllc
+        where hmllc.material_lot_id in
+        <foreach collection="materialIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        and hmllc.tenant_id = #{tenantId}
+        group by hmllc.material_lot_id, hmllc.lab_code
+    </select>
+
+    <select id="workcellByProcessQuery" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+        mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID ,#{processId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'STATION'
+        and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="workcellByLineWorkcellQuery" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+        mt_mod_organization_rel mmor2,
+        mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID , #{lineWorkcellId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.TENANT_ID = mmor.TENANT_ID
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor2.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'STATION'
+        and mmw.ENABLE_FLAG = 'Y'
+    </select>
+</mapper>

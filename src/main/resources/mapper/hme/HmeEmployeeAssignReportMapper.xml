@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeEmployeeAssignReportMapper">
+    <select id="queryList" resultType="com.ruike.hme.domain.vo.HmeEmployeeAssignExportVO" parameterType="com.ruike.hme.api.dto.HmeEmployeeAssignDTO">
+        select
+            he.employee_num,
+            he.name,
+            hq.quality_code,
+            hq.quality_type,
+            hq.quality_name,
+            hq.remark,
+            hea.proficiency,
+            mm.material_code,
+            mm.material_name,
+            hea.date_from,
+            hea.date_to
+        from hme_employee_assign hea
+        left join hzero_platform.hpfm_employee he on hea.employee_id = he.employee_id
+        left join hme_qualification hq on hq.quality_id = hea.quality_id
+        left join mt_material mm on mm.material_id = hea.material_id
+        where hea.tenant_id = #{tenantId}
+        <if test="dto.proficiency != null and dto.proficiency != ''">
+            and hea.proficiency = #{dto.proficiency}
+        </if>
+        <if test="dto.dateFrom != null and dto.dateFrom != ''">
+            and hea.date_from >= #{dto.dateFrom}
+        </if>
+        <if test="dto.dateTo != null and dto.dateTo != ''">
+            and hea.date_to <![CDATA[<=]]> #{dto.dateTo}
+        </if>
+        <if test="dto.employeeNum != null and dto.employeeNum != ''">
+            and he.employee_num like CONCAT('%',#{dto.employeeNum},'%')
+        </if>
+        <if test="dto.name != null and dto.name != ''">
+            and he.name like CONCAT('%',#{dto.name},'%')
+        </if>
+        <if test="dto.qualityId != null and dto.qualityId != ''">
+            and hq.quality_id = #{dto.qualityId}
+        </if>
+        <if test="dto.qualityType != null and dto.qualityType != ''">
+            and hq.quality_type = #{dto.qualityType}
+        </if>
+        <if test="dto.materialId != null and dto.materialId != ''">
+            and mm.material_id = #{dto.materialId}
+        </if>
+
+    </select>
+</mapper>

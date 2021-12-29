@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosWorkcellExceptionMapper">
+
+    <select id="queryList" resultType="com.ruike.hme.domain.vo.HmeCosWorkcellExceptionVO">
+        SELECT
+        hcnr.nc_code_id,
+        hcnr.job_id,
+        hcnr.status,
+        mwo.work_order_num,
+        mwo.production_version,
+        woa.attr_value production_version_description,
+        mwo.qty,
+        hcnr.wafer_num,
+        hcnr.cos_type,
+        ifnull( hcnr.defect_count, 0 ) as nc_quantity,
+        mnc.description,
+        iu.real_name,
+        wkc_st.workcell_code,
+        wkc_st.workcell_name,
+        mm.material_code,
+        mm.material_name,
+        date_format(hcnr.creation_date,'%Y-%m-%d') as creation_date,
+        mnc.nc_code,
+        mnc.description nc_code_description,
+        wkc_prc.workcell_id workcell_process_id,
+        wkc_prc.workcell_name workcell_process_name,
+        wkc_line.workcell_name workcell_line_name,
+        mpl.prod_line_name,
+        hcnr.CREATED_BY,
+        hcnr.work_order_id,
+        hcnr.workcell_id
+        from
+        hme_cos_nc_record hcnr
+        join mt_mod_workcell wkc_st on hcnr.workcell_id = wkc_st.WORKCELL_ID
+        left join mt_mod_organization_rel mor_sp on mor_sp.ORGANIZATION_ID = wkc_st.WORKCELL_ID and
+        mor_sp.ORGANIZATION_TYPE = 'WORKCELL'
+        and mor_sp.TOP_SITE_ID = hcnr.site_id
+        left join mt_mod_workcell wkc_prc on wkc_prc.WORKCELL_ID = mor_sp.PARENT_ORGANIZATION_ID
+        left join mt_mod_organization_rel mor_pl on mor_pl.ORGANIZATION_ID = wkc_prc.WORKCELL_ID and
+        mor_pl.ORGANIZATION_TYPE = 'WORKCELL'
+        and mor_pl.TOP_SITE_ID = hcnr.site_id
+        left join mt_mod_workcell wkc_line on wkc_line.WORKCELL_ID = mor_pl.PARENT_ORGANIZATION_ID,
+        mt_work_order mwo
+        join mt_mod_production_line mpl on mpl.PROD_LINE_ID = mwo.production_line_id
+        left join mt_work_order_attr woa on woa.work_order_id = mwo.work_order_id and woa.attr_name = 'ATTRIBUTE11',
+        mt_nc_code mnc,
+        iam_user iu,
+        mt_material mm
+        WHERE
+        hcnr.tenant_id = #{tenantId}
+        AND hcnr.work_order_id = mwo.WORK_ORDER_ID
+        AND hcnr.nc_code_id = mnc.NC_CODE_ID
+        AND hcnr.CREATED_BY = iu.id
+        AND hcnr.component_material_id = mm.material_id
+        <if test="dto.workOrderNum != null">
+            and mwo.work_order_num LIKE CONCAT('%', #{dto.workOrderNum}, '%')
+        </if>
+        <if test="dto.cosType != null">
+            and hcnr.cos_type = #{dto.cosType}
+        </if>
+        <if test="dto.waferNum != null">
+            and hcnr.wafer_num LIKE CONCAT('%', #{dto.waferNum}, '%')
+        </if>
+        <if test="dto.materialId != null">
+            and mm.material_id = #{dto.materialId}
+        </if>
+        <if test="dto.id != null">
+            and iu.id = #{dto.id}
+        </if>
+        <if test="dto.ncCodeId != null">
+            and hcnr.nc_code_id IN
+            <foreach collection="dto.ncCodeIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null">
+            and mwo.production_line_id IN
+            <foreach collection="dto.prodLineIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellLineId != null">
+            and wkc_line.workcell_id IN
+            <foreach collection="dto.workcellLineIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellProcessId != null">
+            and wkc_prc.workcell_id IN
+            <foreach collection="dto.workcellProcessIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellStationId != null">
+            and hcnr.workcell_id IN
+            <foreach collection="dto.workcellStationIdList" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.startDate != null">
+            and hcnr.creation_date &gt;= #{dto.startDate}
+        </if>
+        <if test="dto.endDate != null">
+            and hcnr.creation_date &lt;= #{dto.endDate}
+        </if>
+    </select>
+
+    <select id="queryEquipment" resultType="com.ruike.hme.domain.valueobject.HmeEquipment">
+        SELECT he.ASSET_ENCODING,
+               he.ASSET_NAME
+        FROM hme_eo_job_equipment heje,
+             hme_equipment he
+        WHERE heje.equipment_id = he.EQUIPMENT_ID
+          AND heje.job_id = #{jobId}
+          AND heje.tenant_id = #{tenantId}
+    </select>
+
+    <select id="batchQueryEquipment" resultType="com.ruike.hme.domain.vo.HmeEquipmentVO4">
+        SELECT
+        heje.job_id,
+        he.ASSET_ENCODING,
+        he.ASSET_NAME
+        FROM
+        hme_eo_job_equipment heje,
+        hme_equipment he
+        WHERE
+        heje.equipment_id = he.EQUIPMENT_ID
+        AND heje.job_id IN
+        <foreach collection="jobIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        AND heje.tenant_id = #{tenantId}
+    </select>
+
+    <select id="queryQuantity" resultType="com.ruike.hme.domain.vo.HmeCosQuantityVO">
+        SELECT mwo.WORK_ORDER_NUM,
+               hcnr.wafer_num,
+               hcnr.cos_type,
+               mmw.WORKCELL_CODE,
+               SUM(
+                       IFNULL(hcnr.defect_count, 0)) AS defect_count_quantity
+        FROM hme_cos_nc_record hcnr,
+             mt_work_order mwo,
+             mt_mod_workcell mmw
+        WHERE hcnr.tenant_id = #{tenantId}
+          AND hcnr.work_order_id = mwo.WORK_ORDER_ID
+          AND mwo.WORK_ORDER_NUM = #{hmeCosQuantityVO.workOrderNum}
+          AND hcnr.wafer_num = #{hmeCosQuantityVO.waferNum}
+          AND hcnr.cos_type = #{hmeCosQuantityVO.cosType}
+          AND mmw.WORKCELL_CODE = #{hmeCosQuantityVO.workcellCode}
+        GROUP BY mwo.WORK_ORDER_NUM,
+                 hcnr.wafer_num,
+                 hcnr.cos_type,
+                 mmw.WORKCELL_CODE
+    </select>
+
+    <select id="batchQueryQuantity" resultType="com.ruike.hme.domain.vo.HmeCosQuantityVO">
+        SELECT mwo.WORK_ORDER_NUM,
+        hcnr.wafer_num,
+        mor.parent_organization_id workcell_process_id,
+        date_format(hcnr.creation_date,'%Y-%m-%d') as creation_date,
+        IFNULL(SUM(hcnr.defect_count), 0) AS defect_count_quantity
+        FROM hme_cos_nc_record hcnr,
+        mt_work_order mwo,
+        mt_mod_organization_rel mor
+        WHERE hcnr.tenant_id = #{tenantId}
+        AND hcnr.work_order_id = mwo.WORK_ORDER_ID
+        and hcnr.workcell_id = mor.organization_id
+        and mor.top_site_id = hcnr.site_id
+        and mor.organization_type = 'WORKCELL'
+        and (mwo.WORK_ORDER_NUM,hcnr.wafer_num ,mor.parent_organization_id,date_format(hcnr.creation_date,'%Y-%m-%d'))
+        in
+        <foreach collection="list" index="index" item="t" open="(" separator="," close=")">
+            (#{t.workOrderNum},#{t.waferNum},#{t.workcellProcessId},date_format(#{t.creationDate},'%Y-%m-%d'))
+        </foreach>
+        GROUP BY mwo.WORK_ORDER_NUM,
+        hcnr.wafer_num,
+        mor.parent_organization_id,
+        date_format(hcnr.creation_date,'%Y-%m-%d')
+    </select>
+</mapper>

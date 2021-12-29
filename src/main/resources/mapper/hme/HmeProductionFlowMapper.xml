@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeProductionFlowMapper">
+
+    <select id="selectList" resultType="com.ruike.hme.api.dto.representation.HmeProductionFlowRepresentation">
+        select wo.work_order_num,
+        wo.production_version,
+        wo.status work_order_status,
+        mm.material_code,
+        mm.material_name,
+        he.job_id,
+        me.eo_id,
+        me.eo_num,
+        mml.material_lot_id,
+        mml.material_lot_code,
+        mrs.description,
+        mrs.router_step_id ,
+        mrs.step_name ,
+        mrs.description step_description,
+        he.workcell_id,
+        cell.workcell_code,
+        cell.workcell_name,
+        he.site_in_date,
+        he.site_out_date,
+        he.site_in_by AS created_by,
+        he.site_out_by AS operator_id,
+        he.rework_flag AS is_rework_flag,
+        he.job_type,
+        he.ATTRIBUTE8 AS remark,
+        wks.shift_date,
+        wks.shift_code,
+        mea.attr_value rework_material_lot
+        FROM
+        mt_eo me
+        JOIN mt_material_lot mml ON mml.material_lot_code = me.IDENTIFICATION AND mml.TENANT_ID = me.TENANT_ID
+        LEFT JOIN mt_eo_attr mea ON me.EO_ID = mea.EO_ID AND mea.ATTR_NAME = 'REWORK_MATERIAL_LOT' AND mea.TENANT_ID = #{tenantId}
+        JOIN mt_material mm ON me.MATERIAL_ID = mm.MATERIAL_ID
+        JOIN hme_eo_job_sn he ON me.EO_ID = he.eo_id
+        LEFT JOIN mt_router_step mrs ON he.eo_step_id = mrs.ROUTER_STEP_ID
+        LEFT JOIN mt_mod_workcell cell ON he.WORKCELL_ID = cell.WORKCELL_ID
+        LEFT JOIN mt_work_order wo ON me.WORK_ORDER_ID = wo.WORK_ORDER_ID
+        LEFT JOIN mt_wkc_shift wks ON he.shift_id = wks.WKC_SHIFT_ID
+        WHERE 1=1
+        <if test="dto.workStartFrom != null">
+            and he.site_in_date &gt;= STR_TO_DATE(#{dto.workStartFrom},'%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workStartTo != null">
+            and he.site_in_date &lt;= STR_TO_DATE(#{dto.workStartTo},'%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workEndFrom != null">
+            and he.site_out_date &gt;= STR_TO_DATE(#{dto.workEndFrom},'%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workEndTo != null">
+            and he.site_out_date &lt;= STR_TO_DATE(#{dto.workEndTo},'%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.reworkMaterialLotList != null and dto.reworkMaterialLotList.size() > 0">
+            AND mea.attr_value IN
+            <foreach collection="dto.reworkMaterialLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            AND wo.work_order_num IN
+            <foreach collection="dto.workOrderNumList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workcellStationIdList != null and dto.workcellStationIdList.size() > 0">
+            AND he.workcell_id IN
+            <foreach collection="dto.workcellStationIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.equipmentIdList != null and dto.equipmentIdList.size() > 0">
+            AND EXISTS(select 1
+            from hme_eo_job_equipment eje
+            where eje.job_id = he.job_id
+            and eje.equipment_id in
+            <foreach collection="dto.equipmentIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>)
+        </if>
+        <if test="dto.productionCodeList != null and dto.productionCodeList.size() > 0">
+            AND mm.MATERIAL_CODE IN
+            <foreach collection="dto.productionCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND mml.MATERIAL_LOT_CODE IN
+            <foreach collection="dto.materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.workOrderStatusList != null and dto.workOrderStatusList.size() > 0">
+            AND wo.status IN
+            <foreach collection="dto.workOrderStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        and he.TENANT_ID = #{tenantId}
+        <if test="dto.identification != null and dto.identification != ''">
+            AND EXISTS(
+            SELECT
+            llc.lab_code
+            FROM
+            hme_material_lot_lab_code llc
+            WHERE
+            llc.tenant_id = #{tenantId}
+            AND llc.material_lot_id = mml.MATERIAL_LOT_id
+            AND llc.router_step_id = he.eo_step_id
+            and llc.lab_code LIKE CONCAT(#{dto.identification},'%')
+            )
+        </if>
+        <if test="dto.badFlag != null and dto.badFlag == 'Y'.toString()">
+            AND EXISTS(
+            select 'A'
+            from mt_nc_record mnr
+            where mnr.TENANT_ID = #{tenantId}
+            and mnr.WORKCELL_ID = he.WORKCELL_ID
+            and mnr.EO_ID = me.EO_ID
+            and (mnr.PARENT_NC_RECORD_ID IS NULL or mnr.PARENT_NC_RECORD_ID = '')
+            )
+        </if>
+        <if test="dto.badFlag != null and dto.badFlag == 'N'.toString()">
+            AND NOT EXISTS(
+            select 'A'
+            from mt_nc_record mnr
+            where mnr.TENANT_ID = #{tenantId}
+            and mnr.WORKCELL_ID = he.WORKCELL_ID
+            and mnr.EO_ID = me.EO_ID
+            and (mnr.PARENT_NC_RECORD_ID IS NULL or mnr.PARENT_NC_RECORD_ID = '')
+            )
+        </if>
+        <if test="dto.reFlag!=null">
+            AND he.rework_flag = #{dto.reFlag}
+        </if>
+        <if test="dto.shiftDate != null">
+            and wks.SHIFT_DATE between concat(#{dto.shiftDate},' 00:00:00') and concat(#{dto.shiftDate},' 23:59:59')
+        </if>
+        <if test="dto.shiftCode!=null">
+            AND wks.SHIFT_CODE like CONCAT(#{dto.shiftCode},'%')
+        </if>
+        <if test="dto.userInId!=null">
+            AND he.site_in_by = #{dto.userInId}
+        </if>
+        <if test="dto.userOutId!=null">
+            AND he.site_out_by = #{dto.userOutId}
+        </if>
+        <if test="dto.workType!=null">
+            AND he.job_type = #{dto.workType}
+        </if>
+        AND he.job_type != 'SSN_PROCESS'
+        AND me.EO_ID is not null
+        ORDER BY
+        me.EO_ID,
+        he.creation_date
+    </select>
+
+    <select id="ncInfoFlagQuery" resultType="com.ruike.hme.domain.vo.EoWorkcellStationNcInfoVO">
+        select mnr.WORKCELL_ID,
+        mnr.EO_ID,
+        count(mnr.NC_RECORD_ID) nc_record_count
+        from mt_nc_record mnr
+        where mnr.TENANT_ID = #{tenantId}
+        and (mnr.WORKCELL_ID, mnr.EO_ID) in
+        <foreach collection="list" item="t" separator="," open="(" close=")">
+            (#{t.workcellId} , #{t.eoId})
+        </foreach>
+        and (mnr.PARENT_NC_RECORD_ID IS NULL or mnr.PARENT_NC_RECORD_ID = '')
+        group by mnr.WORKCELL_ID,
+        mnr.EO_ID
+    </select>
+
+    <select id="workcellByProcessBatchQuery" resultType="java.lang.String">
+        select mmor.ORGANIZATION_ID
+        from mt_mod_organization_rel mmor
+        where mmor.TENANT_ID = #{tenantId}
+        and mmor.PARENT_ORGANIZATION_ID in
+        <foreach collection="processIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+    </select>
+
+    <select id="workcellByLineWorkcellBatchQuery" resultType="java.lang.String">
+        select mmor2.ORGANIZATION_ID
+        from mt_mod_organization_rel mmor,
+        mt_mod_organization_rel mmor2
+        where mmor.TENANT_ID = #{tenantId}
+        and mmor.PARENT_ORGANIZATION_ID in
+        <foreach collection="lineWorkcellIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.TENANT_ID = mmor.TENANT_ID
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+    </select>
+
+    <select id="workcellByProdLineQuery" resultType="java.lang.String">
+        select mmor3.ORGANIZATION_ID
+        from mt_mod_organization_rel mmor,
+             mt_mod_organization_rel mmor2,
+             mt_mod_organization_rel mmor3
+        where mmor.TENANT_ID = #{tenantId}
+        and mmor.PARENT_ORGANIZATION_ID = #{prodLineId}
+        and mmor.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor3.PARENT_ORGANIZATION_ID = mmor2.ORGANIZATION_ID
+        and mmor3.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor3.ORGANIZATION_TYPE = 'WORKCELL'
+    </select>
+
+    <select id="qeuryProcessLineProdByWorkcell"
+            resultType="com.ruike.wms.domain.vo.WmsSummaryOfCosBarcodeProcessingVO2">
+        SELECT
+        mor.ORGANIZATION_ID WORKCELL_ID,
+        mor.PARENT_ORGANIZATION_ID PROCESS_ID,
+        mmp.WORKCELL_NAME PROCESS_NAME,
+        mor2.PARENT_ORGANIZATION_ID LINE_WORKCELL_ID,
+        mml.WORKCELL_NAME LINE_WORKCELL_NAME,
+        mmpl.PROD_LINE_ID,
+        mmpl.PROD_LINE_CODE,
+        mmpl.PROD_LINE_NAME
+        FROM
+        mt_mod_organization_rel mor,
+        mt_mod_organization_rel mor2,
+        mt_mod_organization_rel mor3,
+        mt_mod_workcell mmp,
+        mt_mod_workcell mml,
+        mt_mod_production_line mmpl
+        WHERE mor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor.ORGANIZATION_ID IN
+        <foreach collection="workcellIdList" item="item" index="index" open="(" close=")" separator=",">
+            #{item}
+        </foreach>
+        AND mor.TENANT_ID = #{tenantId}
+        AND mor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor2.ORGANIZATION_ID = mor.PARENT_ORGANIZATION_ID
+        AND mor2.TENANT_ID = mor.TENANT_ID
+        AND mor3.PARENT_ORGANIZATION_TYPE = 'PROD_LINE'
+        AND mor3.ORGANIZATION_TYPE = 'WORKCELL'
+        AND mor3.ORGANIZATION_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mmp.WORKCELL_ID = mor.PARENT_ORGANIZATION_ID
+        AND mml.WORKCELL_ID = mor2.PARENT_ORGANIZATION_ID
+        AND mmpl.PROD_LINE_ID = mor3.PARENT_ORGANIZATION_ID
+    </select>
+
+    <select id="selectLabCodeList" resultType="com.ruike.hme.domain.vo.SnStepLabCodeVO">
+        SELECT llc.material_lot_id,
+        llc.router_step_id,
+        llc.lab_code
+        FROM hme_material_lot_lab_code llc
+        WHERE 1=1
+        AND (llc.material_lot_id, llc.router_step_id) in
+        <foreach collection="list" separator="," item="item" open="(" close=")">
+            (#{item.materialLotId} , #{item.routerStepId})
+        </foreach>
+
+    </select>
+
+    <select id="selectEquipmentList" resultType="com.ruike.hme.domain.vo.JobEquipmentVO">
+        select eje.job_id,
+        GROUP_CONCAT(heq.ASSET_ENCODING) ASSET_ENCODING,
+        GROUP_CONCAT(heq.ASSET_NAME) ASSET_NAME
+        FROM hme_eo_job_equipment eje,
+        hme_equipment heq
+        WHERE heq.equipment_id = eje.equipment_id
+        and eje.job_id in
+        <foreach collection="list" separator="," item="item" open="(" close=")">
+            #{item}
+        </foreach>
+        group by eje.job_id
+    </select>
+
+</mapper>

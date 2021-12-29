@@ -1,0 +1,1525 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.ruike.hme.infra.mapper.HmeCosFunctionMapper">
+
+    <select id="cosFunctionReport" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO2">
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        IFNULL(mmla_mf.ATTR_VALUE,'N') as mf_flag,
+        hmll.ATTRIBUTE10 as patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        case when hmll.status = 'USED' then 'USED'
+        else IFNULL(hsd.ATTRIBUTE1,'UNSELECTED') end  pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 as heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 as heatSinkMaterialId,
+        mm2.MATERIAL_CODE as heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 as heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 as solderAusnRatio,
+        hmll.ATTRIBUTE7 as goldWireMaterialLot,
+        hmll.ATTRIBUTE12 as goldWireMaterialId,
+        mm3.MATERIAL_CODE as goldWireMaterialCode,
+        mm3.MATERIAL_NAME as goldWireMaterialName,
+        hmll.ATTRIBUTE9 as goldWireSupplierLot,
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) as workcell_id,
+        </if>
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE as warehouseCode,
+        mml.LOCATOR_CODE,
+        IFNULL(hmll.ATTRIBUTE14,'N') as FREEZE_FLAG,
+        hmll.load_sequence
+        FROM
+        hme_material_lot_load hmll
+        left join hme_selection_details hsd
+        on hsd.load_sequence = hmll.load_sequence
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm3
+        on mm3.MATERIAL_ID = hmll.ATTRIBUTE12,
+        mt_material_lot mmt
+        left join mt_material_lot_attr mmla
+        on mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        left join mt_material_lot_attr mmla_mf
+        on mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla_mf.ATTR_NAME = 'MF_FLAG',
+        mt_material mm,
+        mt_mod_locator mml
+        left join mt_mod_locator mml2
+        on mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID
+        WHERE
+        hmll.material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        AND hmll.hot_sink_code is not null
+        <if test="dto.startDate != null">
+            and hmll.test_date >= date_format(#{dto.startDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= date_format(#{dto.endDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        AND hmll.tenant_id = #{tenantId}
+        <if test="dto.workOrderNum != null and dto.workOrderNum != '' ">
+            AND FIND_IN_SET(mwo.WORK_ORDER_NUM, #{dto.workOrderNum})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preStatus != null and dto.preStatus != '' ">
+           AND case when hmll.status = 'USED' then FIND_IN_SET(hmll.status , #{dto.preStatus})
+            else FIND_IN_SET(IFNULL(hsd.ATTRIBUTE1,'UNSELECTED'), #{dto.preStatus})  end
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND FIND_IN_SET(hmll.attribute2, #{dto.wafer})
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND FIND_IN_SET(hmll.attribute1, #{dto.cosType})
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND FIND_IN_SET(hmll.hot_sink_code, #{dto.hotSinkCode})
+        </if>
+        <if test="dto.labCode != null and dto.labCode != '' ">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = hmll.tenant_id
+            and hmllc.material_lot_id = mmt.MATERIAL_LOT_ID
+            and FIND_IN_SET(hmllc.lab_code, #{dto.labCode})
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLot != null and dto.heatSinkMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE4, #{dto.heatSinkMaterialLot})
+        </if>
+        <if test="dto.heatSinkMaterialId != null and dto.heatSinkMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE11, #{dto.heatSinkMaterialId})
+        </if>
+        <if test="dto.heatSinkSupplierLot != null and dto.heatSinkSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE6, #{dto.heatSinkSupplierLot})
+        </if>
+        <if test="dto.goldWireMaterialLot != null and dto.goldWireMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE7, #{dto.goldWireMaterialLot})
+        </if>
+        <if test="dto.goldWireMaterialId != null and dto.goldWireMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE12, #{dto.goldWireMaterialId})
+        </if>
+        <if test="dto.goldWireSupplierLot != null and dto.goldWireSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE9, #{dto.goldWireSupplierLot})
+        </if>
+        <if test="dto.warehouseId != null and dto.warehouseId != '' ">
+            AND FIND_IN_SET(mml.PARENT_LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != '' ">
+            AND FIND_IN_SET(mmt.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND IFNULL(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != '' ">
+            AND FIND_IN_SET(mwo.PRODUCTION_LINE_ID, #{dto.prodLineId})
+        </if>
+        <if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+            AND hmll.material_lot_id IN
+            <foreach collection="dto.materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        UNION
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        IFNULL(mmla_mf.ATTR_VALUE,'N') as mf_flag,
+        hmll.ATTRIBUTE10 as patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        'SCRAP' pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 as heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 as heatSinkMaterialId,
+        mm2.MATERIAL_CODE as heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 as heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 as solderAusnRatio,
+        hmll.ATTRIBUTE7 as goldWireMaterialLot,
+        hmll.ATTRIBUTE12 as goldWireMaterialId,
+        mm3.MATERIAL_CODE as goldWireMaterialCode,
+        mm3.MATERIAL_NAME as goldWireMaterialName,
+        hmll.ATTRIBUTE9 as goldWireSupplierLot,
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) as workcell_id,
+        </if>
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE as warehouseCode,
+        mml.LOCATOR_CODE,
+        IFNULL(hmll.ATTRIBUTE14,'N') as FREEZE_FLAG,
+        hmll.load_sequence
+        FROM
+        hme_material_lot_load hmll
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm3
+        on mm3.MATERIAL_ID = hmll.ATTRIBUTE12,
+        mt_material_lot mmt
+        left join mt_material_lot_attr mmla
+        on mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        left join mt_material_lot_attr mmla_mf
+        on mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla_mf.ATTR_NAME = 'MF_FLAG',
+        mt_material mm,
+        mt_mod_locator mml
+        left join mt_mod_locator mml2
+        on mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID
+        WHERE
+        hmll.source_material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND hmll.status = 'N'
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        AND hmll.hot_sink_code is not null
+        <if test="dto.startDate != null">
+            and hmll.test_date >= date_format(#{dto.startDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= date_format(#{dto.endDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        AND hmll.tenant_id = #{tenantId}
+        <if test="dto.workOrderNum != null and dto.workOrderNum != '' ">
+            AND FIND_IN_SET(mwo.WORK_ORDER_NUM, #{dto.workOrderNum})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preStatus != null and dto.preStatus != '' ">
+            AND FIND_IN_SET('SCRAP', #{dto.preStatus})
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND FIND_IN_SET(hmll.attribute2, #{dto.wafer})
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND FIND_IN_SET(hmll.attribute1, #{dto.cosType})
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND FIND_IN_SET(hmll.hot_sink_code, #{dto.hotSinkCode})
+        </if>
+        <if test="dto.labCode != null and dto.labCode != '' ">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = hmll.tenant_id
+            and hmllc.material_lot_id = mmt.MATERIAL_LOT_ID
+            and FIND_IN_SET(hmllc.lab_code, #{dto.labCode})
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLot != null and dto.heatSinkMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE4, #{dto.heatSinkMaterialLot})
+        </if>
+        <if test="dto.heatSinkMaterialId != null and dto.heatSinkMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE11, #{dto.heatSinkMaterialId})
+        </if>
+        <if test="dto.heatSinkSupplierLot != null and dto.heatSinkSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE6, #{dto.heatSinkSupplierLot})
+        </if>
+        <if test="dto.goldWireMaterialLot != null and dto.goldWireMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE7, #{dto.goldWireMaterialLot})
+        </if>
+        <if test="dto.goldWireMaterialId != null and dto.goldWireMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE12, #{dto.goldWireMaterialId})
+        </if>
+        <if test="dto.goldWireSupplierLot != null and dto.goldWireSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE9, #{dto.goldWireSupplierLot})
+        </if>
+        <if test="dto.warehouseId != null and dto.warehouseId != '' ">
+            AND FIND_IN_SET(mml.PARENT_LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != '' ">
+            AND FIND_IN_SET(mmt.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND IFNULL(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != '' ">
+            AND FIND_IN_SET(mwo.PRODUCTION_LINE_ID, #{dto.prodLineId})
+        </if>
+        <if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+            AND hmll.source_material_lot_id IN
+            <foreach collection="dto.materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        UNION
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        IFNULL(mmla_mf.ATTR_VALUE,'N') as mf_flag,
+        hmll.ATTRIBUTE10 as patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        case when hmll.status = 'USED' then 'USED'
+        else IFNULL(hsd.ATTRIBUTE1,'UNSELECTED') end  pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 as heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 as heatSinkMaterialId,
+        mm2.MATERIAL_CODE as heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 as heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 as solderAusnRatio,
+        hmll.ATTRIBUTE7 as goldWireMaterialLot,
+        hmll.ATTRIBUTE12 as goldWireMaterialId,
+        mm3.MATERIAL_CODE as goldWireMaterialCode,
+        mm3.MATERIAL_NAME as goldWireMaterialName,
+        hmll.ATTRIBUTE9 as goldWireSupplierLot,
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hsd.new_material_lot_id
+            and hejs.tenant_id = hsd.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) as workcell_id,
+        </if>
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE as warehouseCode,
+        mml.LOCATOR_CODE,
+        IFNULL(hmll.ATTRIBUTE14,'N') as FREEZE_FLAG,
+        hmll.load_sequence
+        FROM
+        hme_selection_details hsd
+        left join hme_material_lot_load hmll
+        on hmll.load_sequence = hsd.load_sequence and hmll.tenant_id = #{tenantId}
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm3
+        on mm3.MATERIAL_ID = hmll.ATTRIBUTE12,
+        mt_material_lot mmt
+        left join mt_material_lot_attr mmla
+        on mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        left join mt_material_lot_attr mmla_mf
+        on mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla_mf.ATTR_NAME = 'MF_FLAG',
+        mt_material mm,
+        mt_mod_locator mml
+        left join mt_mod_locator mml2
+        on mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID
+        WHERE
+        hsd.new_material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        <if test="dto.startDate != null">
+            and hmll.test_date >= date_format(#{dto.startDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= date_format(#{dto.endDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workOrderNum != null and dto.workOrderNum != '' ">
+            AND FIND_IN_SET(mwo.WORK_ORDER_NUM, #{dto.workOrderNum})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preStatus != null and dto.preStatus != '' ">
+            AND CASE WHEN hmll.status = 'USED' then FIND_IN_SET(hmll.status , #{dto.preStatus})
+            ELSE FIND_IN_SET(IFNULL(hsd.ATTRIBUTE1,'UNSELECTED'), #{dto.preStatus})  END
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND FIND_IN_SET(hmll.attribute2, #{dto.wafer})
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND FIND_IN_SET(hmll.attribute1, #{dto.cosType})
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND FIND_IN_SET(hmll.hot_sink_code, #{dto.hotSinkCode})
+        </if>
+        <if test="dto.labCode != null and dto.labCode != '' ">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = #{tenantId}
+            and hmllc.material_lot_id = mmt.MATERIAL_LOT_ID
+            and FIND_IN_SET(hmllc.lab_code, #{dto.labCode})
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLot != null and dto.heatSinkMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE4, #{dto.heatSinkMaterialLot})
+        </if>
+        <if test="dto.heatSinkMaterialId != null and dto.heatSinkMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE11, #{dto.heatSinkMaterialId})
+        </if>
+        <if test="dto.heatSinkSupplierLot != null and dto.heatSinkSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE6, #{dto.heatSinkSupplierLot})
+        </if>
+        <if test="dto.goldWireMaterialLot != null and dto.goldWireMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE7, #{dto.goldWireMaterialLot})
+        </if>
+        <if test="dto.goldWireMaterialId != null and dto.goldWireMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE12, #{dto.goldWireMaterialId})
+        </if>
+        <if test="dto.goldWireSupplierLot != null and dto.goldWireSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE9, #{dto.goldWireSupplierLot})
+        </if>
+        <if test="dto.warehouseId != null and dto.warehouseId != '' ">
+            AND FIND_IN_SET(mml.PARENT_LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != '' ">
+            AND FIND_IN_SET(mmt.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND IFNULL(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hsd.new_material_lot_id
+            and hejs.tenant_id = hsd.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != '' ">
+            AND FIND_IN_SET(mwo.PRODUCTION_LINE_ID, #{dto.prodLineId})
+        </if>
+        <if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+            AND hsd.new_material_lot_id IN
+            <foreach collection="dto.materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        UNION
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        IFNULL(mmla_mf.ATTR_VALUE,'N') as mf_flag,
+        hmll.ATTRIBUTE10 as patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        case when hmll.status = 'USED' then 'USED'
+        else IFNULL(hsd.ATTRIBUTE1,'UNSELECTED') end  pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 as heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 as heatSinkMaterialId,
+        mm2.MATERIAL_CODE as heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 as heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 as solderAusnRatio,
+        hmll.ATTRIBUTE7 as goldWireMaterialLot,
+        hmll.ATTRIBUTE12 as goldWireMaterialId,
+        mm3.MATERIAL_CODE as goldWireMaterialCode,
+        mm3.MATERIAL_NAME as goldWireMaterialName,
+        hmll.ATTRIBUTE9 as goldWireSupplierLot,
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hsd.old_material_lot_id
+            and hejs.tenant_id = hsd.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) as workcell_id,
+        </if>
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE as warehouseCode,
+        mml.LOCATOR_CODE,
+        IFNULL(hmll.ATTRIBUTE14,'N') as FREEZE_FLAG,
+        hmll.load_sequence
+        FROM
+        hme_selection_details hsd
+        left join hme_material_lot_load hmll
+        on hmll.load_sequence = hsd.load_sequence and hmll.tenant_id = #{tenantId}
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm3
+        on mm3.MATERIAL_ID = hmll.ATTRIBUTE12,
+        mt_material_lot mmt
+        left join mt_material_lot_attr mmla
+        on mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        left join mt_material_lot_attr mmla_mf
+        on mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla_mf.ATTR_NAME = 'MF_FLAG',
+        mt_material mm,
+        mt_mod_locator mml
+        left join mt_mod_locator mml2
+        on mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID
+        WHERE
+        hsd.old_material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        <if test="dto.startDate != null">
+            and hmll.test_date >= date_format(#{dto.startDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= date_format(#{dto.endDate}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="dto.workOrderNum != null and dto.workOrderNum != '' ">
+            AND FIND_IN_SET(mwo.WORK_ORDER_NUM, #{dto.workOrderNum})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preStatus != null and dto.preStatus != '' ">
+            AND CASE WHEN hmll.status = 'USED' then FIND_IN_SET(hmll.status , #{dto.preStatus})
+            ELSE FIND_IN_SET(IFNULL(hsd.ATTRIBUTE1,'UNSELECTED'), #{dto.preStatus})  END
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND FIND_IN_SET(hmll.attribute2, #{dto.wafer})
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND FIND_IN_SET(hmll.attribute1, #{dto.cosType})
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND FIND_IN_SET(hmll.hot_sink_code, #{dto.hotSinkCode})
+        </if>
+        <if test="dto.labCode != null and dto.labCode != '' ">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = #{tenantId}
+            and hmllc.material_lot_id = mmt.MATERIAL_LOT_ID
+            and FIND_IN_SET(hmllc.lab_code, #{dto.labCode})
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLot != null and dto.heatSinkMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE4, #{dto.heatSinkMaterialLot})
+        </if>
+        <if test="dto.heatSinkMaterialId != null and dto.heatSinkMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE11, #{dto.heatSinkMaterialId})
+        </if>
+        <if test="dto.heatSinkSupplierLot != null and dto.heatSinkSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE6, #{dto.heatSinkSupplierLot})
+        </if>
+        <if test="dto.goldWireMaterialLot != null and dto.goldWireMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE7, #{dto.goldWireMaterialLot})
+        </if>
+        <if test="dto.goldWireMaterialId != null and dto.goldWireMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE12, #{dto.goldWireMaterialId})
+        </if>
+        <if test="dto.goldWireSupplierLot != null and dto.goldWireSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE9, #{dto.goldWireSupplierLot})
+        </if>
+        <if test="dto.warehouseId != null and dto.warehouseId != '' ">
+            AND FIND_IN_SET(mml.PARENT_LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != '' ">
+            AND FIND_IN_SET(mmt.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND IFNULL(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hsd.old_material_lot_id
+            and hejs.tenant_id = hsd.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != '' ">
+            AND FIND_IN_SET(mwo.PRODUCTION_LINE_ID, #{dto.prodLineId})
+        </if>
+        <if test="dto.materialLotIdList != null and dto.materialLotIdList.size() > 0">
+            AND hsd.old_material_lot_id IN
+            <foreach collection="dto.materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="cosFunctionReport2" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO2">
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        COALESCE(mmla_mf.ATTR_VALUE,'N') as mf_flag,
+        hmll.ATTRIBUTE10 as patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        COALESCE(hsd.ATTRIBUTE1,'UNSELECTED') as pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 as heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 as heatSinkMaterialId,
+        mm2.MATERIAL_CODE as heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 as heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 as solderAusnRatio,
+        hmll.ATTRIBUTE7 as goldWireMaterialLot,
+        hmll.ATTRIBUTE12 as goldWireMaterialId,
+        mm3.MATERIAL_CODE as goldWireMaterialCode,
+        mm3.MATERIAL_NAME as goldWireMaterialName,
+        hmll.ATTRIBUTE9 as goldWireSupplierLot,
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) as workcell_id,
+        </if>
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE as warehouseCode,
+        mml.LOCATOR_CODE,
+        COALESCE(hmll.ATTRIBUTE14,'N') as FREEZE_FLAG,
+        hmll.load_sequence
+        FROM
+        hme_material_lot_load hmll
+        left join hme_selection_details hsd
+        on hsd.load_sequence = hmll.load_sequence
+        left join mt_material mm2
+        on mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        left join mt_material mm3
+        on mm3.MATERIAL_ID = hmll.ATTRIBUTE12,
+        mt_material_lot mmt
+        left join mt_material_lot_attr mmla
+        on mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        left join mt_work_order mwo
+        on mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        left join mt_mod_production_line mmpl
+        on mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        left join mt_material_lot_attr mmla_mf
+        on mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        and mmla_mf.ATTR_NAME = 'MF_FLAG',
+        mt_material mm,
+        mt_mod_locator mml
+        left join mt_mod_locator mml2
+        on mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID,
+        WHERE
+        hmll.material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        AND hmll.hot_sink_code is not null
+        <if test="dto.startDate != null">
+            and hmll.test_date >= #{dto.startDate}
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= #{dto.endDate}
+        </if>
+        AND hmll.tenant_id = #{tenantId}
+        <if test="dto.workOrderNum != null and dto.workOrderNum != '' ">
+            AND FIND_IN_SET(mwo.WORK_ORDER_NUM, #{dto.workOrderNum})
+        </if>
+        <if test="dto.materialId != null and dto.materialId != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_ID, #{dto.materialId})
+        </if>
+        <if test="dto.preStatus != null and dto.preStatus != '' ">
+            AND FIND_IN_SET(IFNULL(hsd.ATTRIBUTE1,'UNSELECTED'), #{dto.preStatus})
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND FIND_IN_SET(hmll.attribute2, #{dto.wafer})
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND FIND_IN_SET(hmll.attribute1, #{dto.cosType})
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND FIND_IN_SET(mmt.MATERIAL_LOT_CODE, #{dto.materialLotCode})
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND FIND_IN_SET(hmll.hot_sink_code, #{dto.hotSinkCode})
+        </if>
+        <if test="dto.labCode != null and dto.labCode != '' ">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = hmll.tenant_id
+            and hmllc.material_lot_id = mmt.MATERIAL_LOT_ID
+            and FIND_IN_SET(hmllc.lab_code, #{dto.labCode})
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLot != null and dto.heatSinkMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE4, #{dto.heatSinkMaterialLot})
+        </if>
+        <if test="dto.heatSinkMaterialId != null and dto.heatSinkMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE11, #{dto.heatSinkMaterialId})
+        </if>
+        <if test="dto.heatSinkSupplierLot != null and dto.heatSinkSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE6, #{dto.heatSinkSupplierLot})
+        </if>
+        <if test="dto.goldWireMaterialLot != null and dto.goldWireMaterialLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE7, #{dto.goldWireMaterialLot})
+        </if>
+        <if test="dto.goldWireMaterialId != null and dto.goldWireMaterialId != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE12, #{dto.goldWireMaterialId})
+        </if>
+        <if test="dto.goldWireSupplierLot != null and dto.goldWireSupplierLot != '' ">
+            AND FIND_IN_SET(hmll.ATTRIBUTE9, #{dto.goldWireSupplierLot})
+        </if>
+        <if test="dto.warehouseId != null and dto.warehouseId != '' ">
+            AND FIND_IN_SET(mml.PARENT_LOCATOR_ID, #{dto.warehouseId})
+        </if>
+        <if test="dto.locatorId != null and dto.locatorId != '' ">
+            AND FIND_IN_SET(mmt.LOCATOR_ID, #{dto.locatorId})
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND IFNULL(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.workcellIdList != null and dto.workcellIdList.size() > 0">
+            AND (
+            select hejs.workcell_id
+            from hme_eo_job_sn hejs
+            where hejs.material_lot_id = hmll.material_lot_id
+            and hejs.tenant_id = hmll.tenant_id
+            order by hejs.creation_date DESC
+            limit 1
+            ) in
+            <foreach collection="dto.workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineId != null and dto.prodLineId != '' ">
+            AND FIND_IN_SET(mwo.PRODUCTION_LINE_ID, #{dto.prodLineId})
+        </if>
+    </select>
+
+    <select id="cosFunctionReport3" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO9">
+        SELECT
+        hcf.A08 AS test_equipment,
+        hcf.A09,
+        hcf.A010,
+        hcf.A011,
+        hcf.`current`,
+        hcf.A06,
+        hcf.A02,
+        hcf.A04,
+        hcf.A012,
+        hcf.A013,
+        hcf.A014,
+        hcf.A05,
+        hcf.A22,
+        hcf.A23,
+        hcf.A15,
+        hcf.A16,
+        hcf.A18,
+        hcf.A19,
+        hcf.A17,
+        hcf.A20,
+        hcf.A21,
+        hcf.A01,
+        hcf.A03,
+        hcf.A27,
+        mnc.DESCRIPTION,
+        hcf.A26,
+        hcf.A24 AS nc_code,
+        CASE
+
+        WHEN hcf.A24 IS NOT NULL
+        AND hcf.A24 != '' THEN
+        'Y' ELSE 'N'
+        END nc_flag,
+        hcf.A25 AS user_id,
+        iu.real_name,
+        DATE_FORMAT( hcf.CREATION_DATE, '%Y-%m-%d %H:%i:%s' ) AS CREATION_DATE,
+        hcf.load_sequence
+        FROM
+        hme_cos_function hcf
+        LEFT JOIN mt_nc_code mnc ON mnc.SITE_ID = hcf.site_id
+        AND mnc.NC_CODE = hcf.A24
+        AND mnc.TENANT_ID = hcf.TENANT_ID
+        LEFT JOIN hzero_platform.iam_user iu ON iu.id = hcf.A25
+        WHERE
+        hcf.TENANT_ID = #{tenantId}
+        AND hcf.load_sequence IN
+        <foreach collection="dto.loadSequenceList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        <if test="dto.current != null and dto.current != ''">
+            AND FIND_IN_SET(hcf.current, #{dto.current})
+        </if>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and hcf.site_id = #{dto.siteId}
+        </if>
+        <if test="dto.testEquipment != null and dto.testEquipment != '' ">
+            AND hcf.A08 like CONCAT(#{dto.testEquipment} ,'%')
+        </if>
+        <if test="dto.ncCode != null and dto.ncCode != '' ">
+            AND FIND_IN_SET(hcf.A24, #{dto.ncCode})
+        </if>
+        <if test='"Y" == dto.ncFlag'>
+            AND hcf.A24 is not null
+            AND hcf.A24 != ''
+        </if>
+        <if test='"N" == dto.ncFlag'>
+            AND (hcf.A24 is null OR hcf.A24 = '')
+        </if>
+        <if test="dto.userId != null and dto.userId != '' ">
+            AND hcf.A25 = #{dto.userId}
+        </if>
+    </select>
+
+    <select id="getLabCodeByMaterialLot" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO3">
+        select hmllc.material_lot_id, GROUP_CONCAT(hmllc.lab_code SEPARATOR '/') as lab_code
+        from hme_material_lot_lab_code hmllc
+        where hmllc.tenant_id = #{tenantId}
+        and hmllc.material_lot_id in
+        <foreach collection="materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        group by hmllc.material_lot_id
+    </select>
+
+    <select id="getWorkcellByMaterialLot" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO5">
+        select hejs.material_lot_id, hejs.workcell_id, hejs.creation_date
+        from hme_eo_job_sn hejs
+        where hejs.material_lot_id in
+        <foreach collection="materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+        and hejs.tenant_id = #{tenantId}
+    </select>
+
+    <select id="workcellInfoQuery" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO4">
+        select mmw.WORKCELL_ID, mmw.WORKCELL_CODE, mmw.WORKCELL_NAME,
+        process.WORKCELL_ID as process_id, process.WORKCELL_CODE as process_code, process.WORKCELL_NAME as process_name,
+        lineWorkcell.WORKCELL_ID as line_workcell_id, lineWorkcell.WORKCELL_CODE as line_workcell_code , lineWorkcell.WORKCELL_NAME as line_workcell_name
+        from mt_mod_workcell mmw
+        left join mt_mod_organization_rel mmor
+        on mmor.ORGANIZATION_ID = mmw.WORKCELL_ID
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_mod_workcell process
+        on process.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+        left join mt_mod_organization_rel mmor2
+        on mmor2.ORGANIZATION_ID = mmor.PARENT_ORGANIZATION_ID
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        left join mt_mod_workcell lineWorkcell
+        on lineWorkcell.WORKCELL_ID = mmor2.PARENT_ORGANIZATION_ID
+        where mmw.WORKCELL_ID in
+        <foreach collection="workcellIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="getWorkcellByProcess" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+             mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID ,#{processId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'STATION'
+        and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="getWorkcellByProcess2" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+             mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+          and mmor.PARENT_ORGANIZATION_ID IN
+        <foreach collection="processIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+          and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+          and mmw.WORKCELL_ID = mmor.ORGANIZATION_ID
+          and mmw.WORKCELL_TYPE = 'STATION'
+          and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="getWorkcellByLineWorkcell" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+             mt_mod_organization_rel mmor2,
+             mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+        and FIND_IN_SET(mmor.PARENT_ORGANIZATION_ID , #{lineWorkcellId} )
+        and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.TENANT_ID = mmor.TENANT_ID
+        and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+        and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+        and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+        and mmw.WORKCELL_ID = mmor2.ORGANIZATION_ID
+        and mmw.WORKCELL_TYPE = 'STATION'
+        and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="getWorkcellByLineWorkcell2" resultType="java.lang.String">
+        select mmw.WORKCELL_ID
+        from mt_mod_organization_rel mmor,
+             mt_mod_organization_rel mmor2,
+             mt_mod_workcell mmw
+        where mmor.TENANT_ID = #{tenantId}
+          and mmor.PARENT_ORGANIZATION_ID IN
+        <foreach collection="lineWorkcellIdList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+          and mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+          and mmor.ORGANIZATION_TYPE = 'WORKCELL'
+          and mmor2.TENANT_ID = mmor.TENANT_ID
+          and mmor2.PARENT_ORGANIZATION_ID = mmor.ORGANIZATION_ID
+          and mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+          and mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+          and mmw.WORKCELL_ID = mmor2.ORGANIZATION_ID
+          and mmw.WORKCELL_TYPE = 'STATION'
+          and mmw.ENABLE_FLAG = 'Y'
+    </select>
+
+    <select id="gpCosFunctionReport" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO2">
+        SELECT
+        mwo.WORK_ORDER_NUM,
+        mm.MATERIAL_CODE,
+        mm.MATERIAL_NAME,
+        COALESCE ( mmla_mf.ATTR_VALUE, 'N' ) AS mf_flag,
+        hmll.ATTRIBUTE10 AS patch_equipment,
+        hmll.attribute2 WAFER,
+        hmll.attribute1 COS_TYPE,
+        mmt.MATERIAL_LOT_ID,
+        mmt.MATERIAL_LOT_CODE,
+        CONCAT ( hmll.load_row, ',', hmll.load_column ) row_cloumn,
+        COALESCE ( hsd.ATTRIBUTE1, 'UNSELECTED' ) AS pre_status,
+        hmll.hot_sink_code,
+        hmll.ATTRIBUTE4 AS heatSinkMaterialLot,
+        hmll.ATTRIBUTE11 AS heatSinkMaterialId,
+        mm2.MATERIAL_CODE AS heatSinkMaterialCode,
+        hmll.ATTRIBUTE6 AS heatSinkSupplierLot,
+        hmll.ATTRIBUTE13 AS solderAusnRatio,
+        hmll.ATTRIBUTE7 AS goldWireMaterialLot,
+        hmll.ATTRIBUTE12 AS goldWireMaterialId,
+        mm3.MATERIAL_CODE AS goldWireMaterialCode,
+        mm3.MATERIAL_NAME AS goldWireMaterialName,
+        hmll.ATTRIBUTE9 AS goldWireSupplierLot,
+        mmpl.PROD_LINE_NAME,
+        mml2.LOCATOR_CODE AS warehouseCode,
+        mml.LOCATOR_CODE,
+        COALESCE ( hmll.ATTRIBUTE14, 'N' ) AS FREEZE_FLAG,
+        hmll.load_sequence,
+        hcf.A08 AS test_equipment,
+        hcf.A09,
+        hcf.A010,
+        hcf.A011,
+        hcf.CURRENT,
+        hcf.A06,
+        hcf.A02,
+        hcf.A04,
+        hcf.A012,
+        hcf.A013,
+        hcf.A014,
+        hcf.A05,
+        hcf.A22,
+        hcf.A23,
+        hcf.A15,
+        hcf.A16,
+        hcf.A18,
+        hcf.A19,
+        hcf.A17,
+        hcf.A20,
+        hcf.A21,
+        hcf.A01,
+        hcf.A03,
+        hcf.A27,
+        mnc.DESCRIPTION,
+        hcf.A26,
+        hcf.A24 AS nc_code,
+        CASE
+        WHEN hcf.A24 IS NOT NULL
+        AND hcf.A24 != '' THEN
+        'Y' ELSE'N'
+        END nc_flag,
+        hcf.A25 AS real_name,
+        to_char( hcf.CREATION_DATE, 'yyyy-MM-dd hh24:mi:ss' ) AS CREATION_DATE,
+        (select array_to_string(array_agg(hmllc.lab_code) , ';')
+        from hme_material_lot_lab_code hmllc
+        where hmllc.tenant_id = mmt.tenant_id
+        and hmllc.material_lot_id = mmt.material_lot_id) AS lab_code
+        FROM
+        hme_material_lot_load hmll
+        LEFT JOIN hme_selection_details hsd ON hsd.load_sequence = hmll.load_sequence
+        AND hsd.tenant_id = hmll.tenant_id
+        LEFT JOIN mt_material mm2 ON mm2.MATERIAL_ID = hmll.ATTRIBUTE11
+        LEFT JOIN mt_material mm3 ON mm3.MATERIAL_ID = hmll.ATTRIBUTE12
+        LEFT JOIN ${tableName} hcf ON hcf.load_sequence = hmll.load_sequence
+        AND hcf.tenant_id = hmll.tenant_id
+        LEFT JOIN mt_nc_code mnc ON mnc.SITE_ID = hcf.site_id
+        AND mnc.NC_CODE = hcf.A24
+        AND mnc.TENANT_ID = hcf.TENANT_ID,
+        mt_material_lot mmt
+        LEFT JOIN mt_material_lot_attr mmla ON mmla.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        AND mmla.ATTR_NAME = 'WORK_ORDER_ID'
+        AND mmla.tenant_id = mmt.tenant_id
+        LEFT JOIN mt_work_order mwo ON mwo.WORK_ORDER_ID = mmla.ATTR_VALUE
+        LEFT JOIN mt_mod_production_line mmpl ON mmpl.PROD_LINE_ID = mwo.PRODUCTION_LINE_ID
+        LEFT JOIN mt_material_lot_attr mmla_mf ON mmla_mf.MATERIAL_LOT_ID = mmt.MATERIAL_LOT_ID
+        AND mmla_mf.ATTR_NAME = 'MF_FLAG'
+        AND mmla_mf.tenant_id = mmt.tenant_id,
+        mt_material mm,
+        mt_mod_locator mml
+        LEFT JOIN mt_mod_locator mml2 ON mml2.LOCATOR_ID = mml.PARENT_LOCATOR_ID
+        WHERE
+        hmll.material_lot_id = mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        AND hmll.hot_sink_code IS NOT NULL
+        <if test="dto.startDate != null">
+            and hmll.test_date >= to_date(#{dto.startDate}, 'yyyy-MM-dd hh24:mi:ss')
+        </if>
+        <if test="dto.endDate != null">
+            and hmll.test_date &lt;= to_date(#{dto.endDate}, 'yyyy-MM-dd hh24:mi:ss')
+        </if>
+        AND hmll.tenant_id = #{tenantId}
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            AND mwo.WORK_ORDER_NUM in
+            <foreach collection="dto.workOrderNumList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            AND mm.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.preStatusList != null and dto.preStatusList.size() > 0">
+            AND COALESCE ( hsd.ATTRIBUTE1, 'UNSELECTED' ) in
+            <foreach collection="dto.preStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hmll.ATTRIBUTE10 like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.waferList != null and dto.waferList.size() > 0">
+            AND hmll.attribute2 in
+            <foreach collection="dto.waferList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+            AND hmll.attribute1 in
+            <foreach collection="dto.cosTypeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND mmt.MATERIAL_LOT_CODE in
+            <foreach collection="dto.materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.hotSinkCodeList != null and dto.hotSinkCodeList.size() > 0">
+            AND hmll.hot_sink_code in
+            <foreach collection="dto.hotSinkCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCodeList != null and dto.labCodeList.size() > 0">
+            and EXISTS(
+            select 1
+            from hme_material_lot_lab_code hmllc
+            where hmllc.tenant_id = hmll.tenant_id
+            and hmllc.material_lot_id = hmll.material_lot_id
+            AND hmllc.lab_code in
+            <foreach collection="dto.labCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+            )
+        </if>
+        <if test="dto.heatSinkMaterialLotList != null and dto.heatSinkMaterialLotList.size() > 0">
+            AND hmll.ATTRIBUTE4 in
+            <foreach collection="dto.heatSinkMaterialLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.heatSinkMaterialIdList != null and dto.heatSinkMaterialIdList.size() > 0">
+            AND hmll.ATTRIBUTE11 in
+            <foreach collection="dto.heatSinkMaterialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.heatSinkSupplierLotList != null and dto.heatSinkSupplierLotList.size() > 0">
+            AND hmll.ATTRIBUTE6 in
+            <foreach collection="dto.heatSinkSupplierLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireMaterialLotList != null and dto.goldWireMaterialLotList.size() > 0">
+            AND hmll.ATTRIBUTE7 in
+            <foreach collection="dto.goldWireMaterialLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireMaterialIdList != null and dto.goldWireMaterialIdList.size() > 0">
+            AND hmll.ATTRIBUTE12 in
+            <foreach collection="dto.goldWireMaterialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireSupplierLotList != null and dto.goldWireSupplierLotList.size() > 0">
+            AND hmll.ATTRIBUTE9 in
+            <foreach collection="dto.goldWireSupplierLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.warehouseIdList != null and dto.warehouseIdList.size() > 0">
+            AND mml.PARENT_LOCATOR_ID in
+            <foreach collection="dto.warehouseIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.locatorIdList != null and dto.locatorIdList.size() > 0">
+            AND mmt.LOCATOR_ID in
+            <foreach collection="dto.locatorIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.freezeFlag != null and dto.freezeFlag != '' ">
+            AND COALESCE(hmll.ATTRIBUTE14,'N') = #{dto.freezeFlag}
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            AND mmpl.PROD_LINE_ID in
+            <foreach collection="dto.prodLineIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and hcf.site_id = #{dto.siteId}
+        </if>
+        <if test="dto.testEquipment != null and dto.testEquipment != '' ">
+            AND hcf.A08 like CONCAT(#{dto.testEquipment} ,'%')
+        </if>
+        <if test="dto.ncCodeList != null and dto.ncCodeList.size() > 0">
+            AND hcf.A24 in
+            <foreach collection="dto.ncCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test='"Y" == dto.ncFlag'>
+            AND hcf.A24 is not null
+            AND hcf.A24 != ''
+        </if>
+        <if test='"N" == dto.ncFlag'>
+            AND (hcf.A24 is null OR hcf.A24 = '')
+        </if>
+        <if test="dto.userId != null and dto.userId != '' ">
+            AND hcf.A25 = #{dto.userId}
+        </if>
+    </select>
+
+    <select id="gpWorkcellInfoQuery" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO4">
+        SELECT
+            h.material_lot_id,
+            mmw.WORKCELL_ID,
+            mmw.WORKCELL_CODE,
+            mmw.WORKCELL_NAME,
+            process.WORKCELL_ID AS process_id,
+            process.WORKCELL_CODE AS process_code,
+            process.WORKCELL_NAME AS process_name,
+            lineWorkcell.WORKCELL_ID AS line_workcell_id,
+            lineWorkcell.WORKCELL_CODE AS line_workcell_code,
+            lineWorkcell.WORKCELL_NAME AS line_workcell_name
+        FROM
+            ( SELECT hejs.material_lot_id,
+                     hejs.workcell_id,
+                     ROW_NUMBER() OVER ( PARTITION BY hejs.material_lot_id ORDER BY hejs.creation_date DESC ) rowid
+                FROM hme_eo_job_sn hejs
+                WHERE hejs.tenant_id = #{tenantId}
+                <if test="workcellIdList != null and workcellIdList.size() > 0">
+                  AND hejs.workcell_id IN
+                <foreach collection="workcellIdList" index="index" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+                </if>
+                  AND hejs.material_lot_id IN
+                <foreach collection="materialLotIdList" index="index" item="item" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            ) h,
+            mt_mod_workcell mmw
+            LEFT JOIN mt_mod_organization_rel mmor ON mmor.ORGANIZATION_ID = mmw.WORKCELL_ID
+            AND mmor.ORGANIZATION_TYPE = 'WORKCELL'
+            AND mmor.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+            LEFT JOIN mt_mod_workcell process ON process.WORKCELL_ID = mmor.PARENT_ORGANIZATION_ID
+            LEFT JOIN mt_mod_organization_rel mmor2 ON mmor2.ORGANIZATION_ID = mmor.PARENT_ORGANIZATION_ID
+            AND mmor2.ORGANIZATION_TYPE = 'WORKCELL'
+            AND mmor2.PARENT_ORGANIZATION_TYPE = 'WORKCELL'
+            LEFT JOIN mt_mod_workcell lineWorkcell ON lineWorkcell.WORKCELL_ID = mmor2.PARENT_ORGANIZATION_ID
+        WHERE mmw.WORKCELL_ID = h.WORKCELL_ID
+          AND h.rowid = 1
+    </select>
+
+    <select id="selectMaterialLot" resultType="java.lang.String">
+        SELECT
+        mml.MATERIAL_LOT_ID
+        FROM
+        mt_material_lot mml
+        WHERE
+        mml.TENANT_ID = #{tenantId}
+        AND mml.MATERIAL_LOT_CODE IN
+        <foreach collection="materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+            #{item}
+        </foreach>
+    </select>
+
+    <select id="cosFunctionHeadQuery" resultType="com.ruike.hme.api.dto.HmeCosFunctionHeadDTO">
+        SELECT
+        mm.MATERIAL_CODE,
+        hmll.attribute1 COS_TYPE,
+        hmll.load_sequence,
+        mmt.MATERIAL_LOT_CODE,
+        hmll.attribute2 WAFER,
+        CONCAT(
+        hmll.load_row,
+        ',',
+        hmll.load_column
+        ) row_cloumn,
+        hmll.hot_sink_code,
+        mml.LOCATOR_CODE,
+        hmll.`status`
+        FROM
+        hme_material_lot_load hmll,
+        mt_material_lot mmt,
+        mt_material mm,
+        mt_mod_locator mml
+        WHERE
+        hmll.material_lot_id = Mmt.MATERIAL_LOT_ID
+        AND mm.MATERIAL_ID = mmt.MATERIAL_ID
+        AND mml.LOCATOR_ID = mmt.LOCATOR_ID
+        AND hmll.hot_sink_code is not null
+        AND hmll.tenant_id=#{tenantId}
+        <if test="dto.materialCode != null and dto.materialCode != '' ">
+            AND  mm.MATERIAL_CODE  = #{dto.materialCode}
+        </if>
+        <if test="dto.cosType != null and dto.cosType != '' ">
+            AND  hmll.attribute1  = #{dto.cosType}
+        </if>
+        <if test="dto.hotSinkCode != null and dto.hotSinkCode != '' ">
+            AND  hmll.hot_sink_code  = #{dto.hotSinkCode}
+        </if>
+        <if test="dto.materialLotCode != null and dto.materialLotCode != '' ">
+            AND  mmt.MATERIAL_LOT_CODE  = #{dto.materialLotCode}
+        </if>
+        <if test="dto.wafer != null and dto.wafer != '' ">
+            AND  hmll.attribute2 =  #{dto.wafer}
+        </if>
+        ORDER BY hmll.material_lot_id, hmll.load_row, hmll.load_column
+    </select>
+    <select id="gpCosFunctionReport2" resultType="com.ruike.hme.domain.vo.HmeCosFunctionVO2">
+        SELECT
+        hcfc.work_order_num,
+        hcfc.material_code,
+        hcfc.material_name,
+        hcfc.test_equipment,
+        hcfc.patch_equipment,
+        hcfc.wafer,
+        hcfc.cos_type,
+        hcfc.material_lot_id,
+        hcfc.material_lot_code,
+        hcfc.row_column as row_cloumn,
+        hcfc.pre_status,
+        hcfc.pre_status_meaning,
+        hcfc.workcell_id,
+        hcfc.workcell_code,
+        hcfc.workcell_name,
+        hcfc.process_id,
+        hcfc.process_code,
+        hcfc.process_name,
+        hcfc.line_id AS line_workcell_id,
+        hcfc.line_code AS line_workcell_code,
+        hcfc.line_name AS line_workcell_name,
+        hcfc.prod_line_code,
+        hcfc.prod_line_name,
+        hcfc.hot_sink_code,
+        hcfc.lab_code,
+        hcfc.a09,
+        hcfc.a010,
+        hcfc.a011,
+        hcfc.current,
+        hcfc.a06,
+        hcfc.a02,
+        hcfc.a04,
+        hcfc.a012,
+        hcfc.a013,
+        hcfc.a014,
+        hcfc.a05,
+        hcfc.a22,
+        hcfc.a23,
+        hcfc.a15,
+        hcfc.a16,
+        hcfc.a18,
+        hcfc.a20,
+        hcfc.a17,
+        hcfc.a19,
+        hcfc.a21,
+        hcfc.a01,
+        hcfc.a03,
+        hcfc.a27,
+        hcfc.divergence_grade,
+        hcfc.polarization_grade,
+        hcfc.nc_description as description,
+        hcfc.nc_code,
+        hcfc.a26,
+        hcfc.nc_flag,
+        hcfc.nc_flag_meaning,
+        hcfc.heat_sink_material_lot,
+        hcfc.heat_sink_material_id,
+        hcfc.heat_sink_material_code,
+        hcfc.heat_sink_supplier_lot,
+        hcfc.heat_sink_solder_ausn_ratio as solder_ausn_ratio,
+        hcfc.gold_wire_material_lot,
+        hcfc.gold_wire_material_id,
+        hcfc.gold_wire_material_code,
+        hcfc.gold_wire_supplier_lot,
+        hcfc.real_name,
+        hcfc.test_date  as creation_date
+        FROM
+        tarzan_mes.${tableName} hcfc
+        WHERE
+        hcfc.tenant_id = #{tenantId}
+        AND hcfc.material_lot_id is not null
+        AND hcfc.material_lot_id != ''
+        <if test="dto.startDate != null">
+            and hcfc.test_date &gt;= to_timestamp(#{dto.startDate}, 'yyyy-MM-dd hh24:mi:ss')
+        </if>
+        <if test="dto.endDate != null">
+            and hcfc.test_date &lt;= to_timestamp(#{dto.endDate}, 'yyyy-MM-dd hh24:mi:ss')
+        </if>
+        <if test="dto.workOrderNumList != null and dto.workOrderNumList.size() > 0">
+            AND hcfc.WORK_ORDER_NUM in
+            <foreach collection="dto.workOrderNumList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialIdList != null and dto.materialIdList.size() > 0">
+            AND hcfc.MATERIAL_ID in
+            <foreach collection="dto.materialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.preStatusList != null and dto.preStatusList.size() > 0">
+            AND hcfc.pre_status in
+            <foreach collection="dto.preStatusList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.patchEquipment != null and dto.patchEquipment != '' ">
+            AND hcfc.patch_equipment like CONCAT(#{dto.patchEquipment} ,'%')
+        </if>
+        <if test="dto.waferList != null and dto.waferList.size() > 0">
+            AND hcfc.wafer in
+            <foreach collection="dto.waferList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.cosTypeList != null and dto.cosTypeList.size() > 0">
+            AND hcfc.cos_type in
+            <foreach collection="dto.cosTypeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.materialLotCodeList != null and dto.materialLotCodeList.size() > 0">
+            AND hcfc.MATERIAL_LOT_CODE in
+            <foreach collection="dto.materialLotCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.hotSinkCodeList != null and dto.hotSinkCodeList.size() > 0">
+            AND hcfc.hot_sink_code in
+            <foreach collection="dto.hotSinkCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.labCodeList != null and dto.labCodeList.size() > 0">
+            and hcfc.lab_code in
+            <foreach collection="dto.labCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.heatSinkMaterialLotList != null and dto.heatSinkMaterialLotList.size() > 0">
+            AND hcfc.heat_sink_material_lot in
+            <foreach collection="dto.heatSinkMaterialLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.heatSinkMaterialIdList != null and dto.heatSinkMaterialIdList.size() > 0">
+            AND hcfc.heat_sink_material_id in
+            <foreach collection="dto.heatSinkMaterialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.heatSinkSupplierLotList != null and dto.heatSinkSupplierLotList.size() > 0">
+            AND hcfc.heat_sink_supplier_lot in
+            <foreach collection="dto.heatSinkSupplierLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireMaterialLotList != null and dto.goldWireMaterialLotList.size() > 0">
+            AND hcfc.gold_wire_material_lot in
+            <foreach collection="dto.goldWireMaterialLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireMaterialIdList != null and dto.goldWireMaterialIdList.size() > 0">
+            AND hcfc.gold_wire_material_id in
+            <foreach collection="dto.goldWireMaterialIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.goldWireSupplierLotList != null and dto.goldWireSupplierLotList.size() > 0">
+            AND hcfc.gold_wire_supplier_lot in
+            <foreach collection="dto.goldWireSupplierLotList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.prodLineIdList != null and dto.prodLineIdList.size() > 0">
+            AND hcfc.PROD_LINE_ID in
+            <foreach collection="dto.prodLineIdList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test="dto.siteId != null and dto.siteId != ''">
+            and hcfc.site_id = #{dto.siteId}
+        </if>
+        <if test="dto.testEquipment != null and dto.testEquipment != '' ">
+            AND hcfc.test_equipment like CONCAT(#{dto.testEquipment} ,'%')
+        </if>
+        <if test="dto.ncCodeList != null and dto.ncCodeList.size() > 0">
+            AND hcf.A24 in
+            <foreach collection="dto.ncCodeList" index="index" item="item" open="(" separator="," close=")">
+                #{item}
+            </foreach>
+        </if>
+        <if test='"Y" == dto.ncFlag'>
+            AND hcfc.nc_flag != 'Y'
+        </if>
+        <if test='"N" == dto.ncFlag'>
+            AND hcfc.nc_flag = 'N'
+        </if>
+        <if test="dto.userId != null and dto.userId != '' ">
+            AND hcf.A25 = #{dto.userId}
+        </if>
+    </select>
+
+</mapper>
